@@ -86,6 +86,30 @@ const FIELD_LINE_TOPS: Record<'selection' | 'A' | 'B', Record<Position, number>>
   },
 };
 
+const FIELD_LINE_TOPS_MOBILE: Record<'selection' | 'A' | 'B', Record<Position, number>> = {
+  selection: {
+    Goleiro: 84,
+    Zagueiro: 68,
+    'Meia defensivo': 52,
+    'Meia ofensivo': 36,
+    Atacante: 20,
+  },
+  A: {
+    Goleiro: 8,
+    Zagueiro: 19,
+    'Meia defensivo': 31,
+    'Meia ofensivo': 43,
+    Atacante: 54,
+  },
+  B: {
+    Goleiro: 92,
+    Zagueiro: 81,
+    'Meia defensivo': 69,
+    'Meia ofensivo': 57,
+    Atacante: 46,
+  },
+};
+
 const getPlayerInitials = (name: string) =>
   name
     .split(' ')
@@ -182,9 +206,19 @@ const distributeLineSlots = (count: number, min: number, max: number) => {
   return Array.from({ length: count }, (_, idx) => min + ((max - min) * idx) / (count - 1));
 };
 
-const getLineConfig = (position: Position, count: number) => {
+const getLineConfig = (position: Position, count: number, isMobileViewport = false) => {
   const slotLimit = position === 'Atacante' ? 3 : position === 'Goleiro' ? 1 : 4;
-  const padding = position === 'Atacante' ? 18 : position === 'Zagueiro' ? 20 : 16;
+  const padding = isMobileViewport
+    ? position === 'Atacante'
+      ? 14
+      : position === 'Zagueiro'
+        ? 16
+        : 12
+    : position === 'Atacante'
+      ? 18
+      : position === 'Zagueiro'
+        ? 20
+        : 16;
   const totalRows = Math.ceil(count / slotLimit);
 
   return { slotLimit, padding, totalRows };
@@ -237,9 +271,9 @@ const SoccerJersey = ({ color, label, playerName }: { color: string, label: stri
   <motion.div 
     initial={{ scale: 0.5, rotate: -10 }}
     animate={{ scale: 1, rotate: 0 }}
-    className="relative flex h-[68px] w-[96px] items-center justify-center sm:h-[84px] sm:w-[128px]"
+    className="relative flex h-[54px] w-[78px] items-center justify-center sm:h-[84px] sm:w-[128px]"
   >
-    <svg viewBox="0 0 100 100" className="h-10 w-10 drop-shadow-xl overflow-visible sm:h-14 sm:w-14">
+    <svg viewBox="0 0 100 100" className="h-8 w-8 drop-shadow-xl overflow-visible sm:h-14 sm:w-14">
       <defs>
         <linearGradient id="jerseyGradient" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" style={{ stopColor: color, stopOpacity: 1 }} />
@@ -278,8 +312,8 @@ const SoccerJersey = ({ color, label, playerName }: { color: string, label: stri
         {label}
       </text>
     </svg>
-    <div className="pointer-events-none absolute left-1/2 top-[54%] w-[86px] -translate-x-1/2 rounded-md border border-white/10 bg-black/82 px-1.5 py-1 shadow-2xl backdrop-blur-sm sm:w-[116px] sm:px-2 sm:py-1.5">
-      <span className="block break-words text-center text-[8px] font-black leading-[1.05] text-white sm:text-[10px]">
+    <div className="pointer-events-none absolute left-1/2 top-[54%] w-[72px] -translate-x-1/2 rounded-md border border-white/10 bg-black/82 px-1 py-0.5 shadow-2xl backdrop-blur-sm sm:w-[116px] sm:px-2 sm:py-1.5">
+      <span className="block break-words text-center text-[7px] font-black leading-[1.05] text-white sm:text-[10px]">
         {playerName}
       </span>
     </div>
@@ -388,6 +422,7 @@ export default function App() {
   const [isExportingImage, setIsExportingImage] = useState(false);
   const [shareFeedback, setShareFeedback] = useState<string | null>(null);
   const userMenuRef = React.useRef<HTMLDivElement>(null);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
 
   const allAvailablePlayers = useMemo(() => [...players, ...tempPlayersRegistry], [players, tempPlayersRegistry]);
 
@@ -496,6 +531,17 @@ export default function App() {
     const timeoutId = window.setTimeout(() => setShareFeedback(null), 3000);
     return () => window.clearTimeout(timeoutId);
   }, [shareFeedback]);
+
+  React.useEffect(() => {
+    const updateViewportMode = () => {
+      setIsMobileViewport(window.innerWidth < 640);
+    };
+
+    updateViewportMode();
+    window.addEventListener('resize', updateViewportMode);
+
+    return () => window.removeEventListener('resize', updateViewportMode);
+  }, []);
 
   React.useEffect(() => {
     if (!showUserMenu) return;
@@ -764,14 +810,15 @@ export default function App() {
       playersInSameLine.findIndex((candidate) => candidate.id === player.id),
       0
     );
-    const { slotLimit, padding, totalRows } = getLineConfig(player.position, playersInSameLine.length);
+    const { slotLimit, padding, totalRows } = getLineConfig(player.position, playersInSameLine.length, isMobileViewport);
     const rowIndex = Math.floor(playerIndexInLine / slotLimit);
     const colIndex = playerIndexInLine % slotLimit;
     const itemsBeforeRow = rowIndex * slotLimit;
     const itemsInRow = Math.min(slotLimit, playersInSameLine.length - itemsBeforeRow);
     const leftSlots = distributeLineSlots(itemsInRow, padding, 100 - padding);
-    const baseTop = FIELD_LINE_TOPS[team ?? 'selection'][player.position];
-    const verticalOffset = totalRows > 1 ? (rowIndex - (totalRows - 1) / 2) * 4.5 : 0;
+    const fieldLineTops = isMobileViewport ? FIELD_LINE_TOPS_MOBILE : FIELD_LINE_TOPS;
+    const baseTop = fieldLineTops[team ?? 'selection'][player.position];
+    const verticalOffset = totalRows > 1 ? (rowIndex - (totalRows - 1) / 2) * (isMobileViewport ? 6.5 : 4.5) : 0;
 
     return {
       top: `${baseTop + verticalOffset}%`,
