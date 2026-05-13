@@ -16,6 +16,7 @@ import {
   Plus,
   X,
   FileDown,
+  Share2,
   Sun,
   Moon,
   LogOut
@@ -28,7 +29,166 @@ import { cn } from './lib/utils';
 
 type Tab = 'players' | 'match' | 'history';
 
+type PlayerWinStats = {
+  id: string;
+  name: string;
+  wins: number;
+  draws: number;
+  losses: number;
+  played: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  winRate: number;
+};
+
+type ShareableMatch = {
+  teamA: Team;
+  teamB: Team;
+  skillDiff: number;
+  scoreA?: number;
+  scoreB?: number;
+  date?: string;
+  heading: string;
+  subheading: string;
+};
+
 const POSITIONS: Position[] = ['Goleiro', 'Zagueiro', 'Meia defensivo', 'Meia ofensivo', 'Atacante'];
+const POSITION_SHORT: Record<Position, string> = {
+  Goleiro: 'GOL',
+  Zagueiro: 'ZAG',
+  'Meia defensivo': 'VOL',
+  'Meia ofensivo': 'MEI',
+  Atacante: 'ATA',
+};
+const CENTER_STAGE_CLASS = "mx-auto w-full max-w-[340px] sm:max-w-[460px] xl:max-w-[560px]";
+
+const FIELD_LINE_TOPS: Record<'selection' | 'A' | 'B', Record<Position, number>> = {
+  selection: {
+    Goleiro: 86,
+    Zagueiro: 70,
+    'Meia defensivo': 54,
+    'Meia ofensivo': 38,
+    Atacante: 22,
+  },
+  A: {
+    Goleiro: 8,
+    Zagueiro: 19,
+    'Meia defensivo': 30,
+    'Meia ofensivo': 40,
+    Atacante: 46,
+  },
+  B: {
+    Goleiro: 92,
+    Zagueiro: 81,
+    'Meia defensivo': 70,
+    'Meia ofensivo': 60,
+    Atacante: 54,
+  },
+};
+
+const getPlayerInitials = (name: string) =>
+  name
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
+const getJerseyPlayerName = (name: string) => name.trim();
+
+const escapeSvgText = (value: string) =>
+  value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+
+const sortPlayersByPosition = (players: Player[]) =>
+  [...players].sort((left, right) => {
+    const positionDiff = POSITIONS.indexOf(left.position) - POSITIONS.indexOf(right.position);
+    if (positionDiff !== 0) return positionDiff;
+    return left.name.localeCompare(right.name, 'pt-BR');
+  });
+
+const createShareCardSvg = (match: ShareableMatch) => {
+  const width = 1200;
+  const height = 1500;
+  const teamAPlayers = sortPlayersByPosition(match.teamA.players);
+  const teamBPlayers = sortPlayersByPosition(match.teamB.players);
+  const rowHeight = 92;
+
+  const renderTeamColumn = (
+    title: string,
+    accent: string,
+    surface: string,
+    x: number,
+    players: Player[]
+  ) => {
+    const rows = players
+      .map((player, index) => {
+        const y = 272 + index * rowHeight;
+        const safeName = escapeSvgText(player.name);
+        const safePosition = escapeSvgText(POSITION_SHORT[player.position]);
+
+        return `
+          <g transform="translate(${x}, ${y})">
+            <rect x="0" y="0" width="480" height="72" rx="24" fill="${surface}" stroke="rgba(255,255,255,0.08)" />
+            <rect x="22" y="18" width="78" height="36" rx="18" fill="${accent}" opacity="0.18" />
+            <text x="61" y="42" text-anchor="middle" fill="${accent}" font-size="22" font-weight="900" font-family="Inter, Arial, sans-serif">${safePosition}</text>
+            <text x="126" y="34" fill="#F8FAFC" font-size="28" font-weight="800" font-family="Inter, Arial, sans-serif">${safeName}</text>
+            <text x="126" y="58" fill="#94A3B8" font-size="18" font-weight="700" font-family="Inter, Arial, sans-serif">#${index + 1}</text>
+          </g>
+        `;
+      })
+      .join('');
+
+    return `
+      <g>
+        <rect x="${x}" y="150" width="480" height="${Math.max(420, 170 + players.length * rowHeight)}" rx="36" fill="rgba(15,23,42,0.78)" stroke="rgba(255,255,255,0.12)" />
+        <text x="${x + 240}" y="222" text-anchor="middle" fill="${accent}" font-size="36" font-weight="900" font-family="Inter, Arial, sans-serif">${escapeSvgText(title)}</text>
+        ${rows}
+      </g>
+    `;
+  };
+
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+      <defs>
+        <linearGradient id="bg" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#14532D" />
+          <stop offset="50%" stop-color="#166534" />
+          <stop offset="100%" stop-color="#0F3D1E" />
+        </linearGradient>
+      </defs>
+      <rect width="${width}" height="${height}" fill="url(#bg)" />
+      <rect x="34" y="34" width="${width - 68}" height="${height - 68}" rx="42" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.12)" />
+      <text x="${width / 2}" y="92" text-anchor="middle" fill="#F8FAFC" font-size="54" font-weight="900" font-family="Inter, Arial, sans-serif">${escapeSvgText(match.heading)}</text>
+      <text x="${width / 2}" y="134" text-anchor="middle" fill="#BFDBFE" font-size="24" font-weight="700" font-family="Inter, Arial, sans-serif">${escapeSvgText(match.subheading)}</text>
+      ${renderTeamColumn('Time Verde', '#10B981', 'rgba(2,44,34,0.72)', 80, teamAPlayers)}
+      ${renderTeamColumn('Time Azul', '#60A5FA', 'rgba(15,23,42,0.76)', 640, teamBPlayers)}
+      <rect x="80" y="1260" width="1040" height="156" rx="32" fill="rgba(15,23,42,0.78)" stroke="rgba(255,255,255,0.10)" />
+      ${match.scoreA !== undefined && match.scoreB !== undefined
+        ? `<text x="${width / 2}" y="1346" text-anchor="middle" fill="#F8FAFC" font-size="42" font-weight="900" font-family="Inter, Arial, sans-serif">${match.scoreA} X ${match.scoreB}</text>`
+        : `<text x="${width / 2}" y="1346" text-anchor="middle" fill="#94A3B8" font-size="22" font-weight="700" font-family="Inter, Arial, sans-serif">Gerado no Pelada Balanceada</text>`}
+      ${match.date ? `<text x="${width / 2}" y="1392" text-anchor="middle" fill="#94A3B8" font-size="20" font-weight="700" font-family="Inter, Arial, sans-serif">${escapeSvgText(match.date)}</text>` : ''}
+    </svg>
+  `;
+};
+
+const distributeLineSlots = (count: number, min: number, max: number) => {
+  if (count <= 1) return [50];
+  return Array.from({ length: count }, (_, idx) => min + ((max - min) * idx) / (count - 1));
+};
+
+const getLineConfig = (position: Position, count: number) => {
+  const slotLimit = position === 'Atacante' ? 3 : position === 'Goleiro' ? 1 : 4;
+  const padding = position === 'Atacante' ? 18 : position === 'Zagueiro' ? 20 : 16;
+  const totalRows = Math.ceil(count / slotLimit);
+
+  return { slotLimit, padding, totalRows };
+};
 
 const PositionBadge = ({ position, isSecondary = false }: { position: Position, isSecondary?: boolean }) => {
   const badgeClass = {
@@ -73,13 +233,13 @@ const PlayerAvatar = ({ instagram, name, size = "md" }: { instagram?: string, na
   );
 };
 
-const SoccerJersey = ({ color, label }: { color: string, label: string }) => (
+const SoccerJersey = ({ color, label, playerName }: { color: string, label: string, playerName: string }) => (
   <motion.div 
     initial={{ scale: 0.5, rotate: -10 }}
     animate={{ scale: 1, rotate: 0 }}
-    className="relative w-10 h-10 flex items-center justify-center"
+    className="relative flex h-[68px] w-[96px] items-center justify-center sm:h-[84px] sm:w-[128px]"
   >
-    <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-xl overflow-visible">
+    <svg viewBox="0 0 100 100" className="h-10 w-10 drop-shadow-xl overflow-visible sm:h-14 sm:w-14">
       <defs>
         <linearGradient id="jerseyGradient" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" style={{ stopColor: color, stopOpacity: 1 }} />
@@ -107,8 +267,8 @@ const SoccerJersey = ({ color, label }: { color: string, label: string }) => (
       
       {/* Label (Initials) */}
       <text 
-        x="50" y="68" 
-        fontSize="24" 
+        x="50" y="56" 
+        fontSize="18" 
         fontWeight="900" 
         fill="white" 
         textAnchor="middle" 
@@ -118,6 +278,11 @@ const SoccerJersey = ({ color, label }: { color: string, label: string }) => (
         {label}
       </text>
     </svg>
+    <div className="pointer-events-none absolute left-1/2 top-[54%] w-[86px] -translate-x-1/2 rounded-md border border-white/10 bg-black/82 px-1.5 py-1 shadow-2xl backdrop-blur-sm sm:w-[116px] sm:px-2 sm:py-1.5">
+      <span className="block break-words text-center text-[8px] font-black leading-[1.05] text-white sm:text-[10px]">
+        {playerName}
+      </span>
+    </div>
   </motion.div>
 );
 
@@ -152,7 +317,7 @@ const TeamBalanceDashboard = ({ result }: { result: DrawResult }) => {
   };
 
   return (
-    <div className="game-card p-4 border-white/5 bg-black/40">
+    <div className="game-card border-slate-border bg-slate-panel/90 p-4">
        <div className="text-[10px] font-black text-slate-muted uppercase tracking-widest mb-4 flex items-center gap-2">
          <ShieldCheck size={14} className="text-primary-emerald" /> 
          INDICADOR DE EQUILÍBRIO
@@ -166,23 +331,23 @@ const TeamBalanceDashboard = ({ result }: { result: DrawResult }) => {
              <div className="flex flex-col items-center">
                 <span className="text-[7px] font-bold text-slate-muted uppercase mb-1">DEFESA</span>
                 <div className="flex items-center gap-2">
-                   <span className={cn("text-xs font-black", statsA.defense > statsB.defense ? "text-primary-emerald" : "text-white/40")}>{statsA.defense}</span>
+                   <span className={cn("text-xs font-black", statsA.defense > statsB.defense ? "text-primary-emerald" : "text-slate-muted")}>{statsA.defense}</span>
                    <div className="h-1 w-12 bg-white/5 rounded-full overflow-hidden flex">
                       <div className="h-full bg-primary-emerald" style={{ width: `${(statsA.defense / (statsA.defense + statsB.defense || 1)) * 100}%` }} />
                       <div className="h-full bg-blue-500" style={{ width: `${(statsB.defense / (statsA.defense + statsB.defense || 1)) * 100}%` }} />
                    </div>
-                   <span className={cn("text-xs font-black", statsB.defense > statsA.defense ? "text-blue-500" : "text-white/40")}>{statsB.defense}</span>
+                   <span className={cn("text-xs font-black", statsB.defense > statsA.defense ? "text-blue-500" : "text-slate-muted")}>{statsB.defense}</span>
                 </div>
              </div>
              <div className="flex flex-col items-center">
                 <span className="text-[7px] font-bold text-slate-muted uppercase mb-1">ATAQUE</span>
                 <div className="flex items-center gap-2">
-                   <span className={cn("text-xs font-black", statsA.attack > statsB.attack ? "text-primary-emerald" : "text-white/40")}>{statsA.attack}</span>
+                   <span className={cn("text-xs font-black", statsA.attack > statsB.attack ? "text-primary-emerald" : "text-slate-muted")}>{statsA.attack}</span>
                    <div className="h-1 w-12 bg-white/5 rounded-full overflow-hidden flex">
                       <div className="h-full bg-primary-emerald" style={{ width: `${(statsA.attack / (statsA.attack + statsB.attack || 1)) * 100}%` }} />
                       <div className="h-full bg-blue-500" style={{ width: `${(statsB.attack / (statsA.attack + statsB.attack || 1)) * 100}%` }} />
                    </div>
-                   <span className={cn("text-xs font-black", statsB.attack > statsA.attack ? "text-blue-500" : "text-white/40")}>{statsB.attack}</span>
+                   <span className={cn("text-xs font-black", statsB.attack > statsA.attack ? "text-blue-500" : "text-slate-muted")}>{statsB.attack}</span>
                 </div>
              </div>
           </div>
@@ -219,8 +384,87 @@ export default function App() {
   const [scoreA, setScoreA] = useState<string>('');
   const [scoreB, setScoreB] = useState<string>('');
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
+  const [isExportingImage, setIsExportingImage] = useState(false);
+  const [shareFeedback, setShareFeedback] = useState<string | null>(null);
 
   const allAvailablePlayers = useMemo(() => [...players, ...tempPlayersRegistry], [players, tempPlayersRegistry]);
+
+  const playerWinRanking = useMemo<PlayerWinStats[]>(() => {
+    const statsMap = new Map<string, Omit<PlayerWinStats, 'winRate'>>();
+
+    const ensurePlayerStats = (player: Player) => {
+      if (!statsMap.has(player.id)) {
+        statsMap.set(player.id, {
+          id: player.id,
+          name: player.name,
+          wins: 0,
+          draws: 0,
+          losses: 0,
+          played: 0,
+          goalsFor: 0,
+          goalsAgainst: 0,
+        });
+      }
+
+      const playerStats = statsMap.get(player.id)!;
+      if (player.name.length > playerStats.name.length) {
+        playerStats.name = player.name;
+      }
+
+      return playerStats;
+    };
+
+    history.forEach((game) => {
+      if (game.scoreA === undefined || game.scoreB === undefined) return;
+
+      game.teamA.players.forEach((player) => {
+        const stats = ensurePlayerStats(player);
+        stats.played += 1;
+        stats.goalsFor += game.scoreA!;
+        stats.goalsAgainst += game.scoreB!;
+
+        if (game.scoreA! > game.scoreB!) stats.wins += 1;
+        else if (game.scoreA === game.scoreB) stats.draws += 1;
+        else stats.losses += 1;
+      });
+
+      game.teamB.players.forEach((player) => {
+        const stats = ensurePlayerStats(player);
+        stats.played += 1;
+        stats.goalsFor += game.scoreB!;
+        stats.goalsAgainst += game.scoreA!;
+
+        if (game.scoreB! > game.scoreA!) stats.wins += 1;
+        else if (game.scoreA === game.scoreB) stats.draws += 1;
+        else stats.losses += 1;
+      });
+    });
+
+    return [...statsMap.values()]
+      .map((stats) => ({
+        ...stats,
+        winRate: stats.played > 0 ? Math.round((stats.wins / stats.played) * 100) : 0,
+      }))
+      .sort((left, right) => {
+        if (right.wins !== left.wins) return right.wins - left.wins;
+        if (right.winRate !== left.winRate) return right.winRate - left.winRate;
+        if (right.played !== left.played) return right.played - left.played;
+        return left.name.localeCompare(right.name, 'pt-BR');
+      });
+  }, [history]);
+
+  const playerStatsById = useMemo(
+    () => new Map(playerWinRanking.map((player) => [player.id, player])),
+    [playerWinRanking]
+  );
+
+  const completedHistory = useMemo(
+    () => history.filter((game) => game.scoreA !== undefined && game.scoreB !== undefined),
+    [history]
+  );
+
+  const latestCompletedGame = completedHistory[0];
+  const archivedCompletedGames = completedHistory.slice(1);
 
   // Form State
   const [isEditing, setIsEditing] = useState<string | null>(null);
@@ -244,6 +488,12 @@ export default function App() {
 
   const [showAddForm, setShowAddForm] = useState(false);
   const formRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!shareFeedback) return;
+    const timeoutId = window.setTimeout(() => setShareFeedback(null), 3000);
+    return () => window.clearTimeout(timeoutId);
+  }, [shareFeedback]);
 
   const handleAddPlayer = (e: React.FormEvent) => {
     e.preventDefault();
@@ -318,84 +568,195 @@ export default function App() {
     setDrawResult(balanceTeams(activePlayers));
   };
 
+  const createShareableMatch = (match: DrawResult | GameHistory): ShareableMatch => {
+    const hasScore = 'scoreA' in match;
+
+    return {
+      teamA: match.teamA,
+      teamB: match.teamB,
+      skillDiff: match.skillDiff,
+      scoreA: hasScore ? match.scoreA : undefined,
+      scoreB: hasScore ? match.scoreB : undefined,
+      date: hasScore ? match.date : undefined,
+      heading: hasScore ? 'Último resultado' : 'Pelada Balanceada',
+      subheading: hasScore ? 'Partida finalizada e pronta para partilha' : 'Times sorteados prontos para o jogo',
+    };
+  };
+
+  const createShareImageBlob = async (match: DrawResult | GameHistory) => {
+    const svgMarkup = createShareCardSvg(createShareableMatch(match));
+    const svgBlob = new Blob([svgMarkup], { type: 'image/svg+xml;charset=utf-8' });
+    const svgUrl = URL.createObjectURL(svgBlob);
+
+    try {
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('Falha ao montar a imagem do time.'));
+        img.src = svgUrl;
+      });
+
+      const canvas = document.createElement('canvas');
+      canvas.width = 1200;
+      canvas.height = 1500;
+      const context = canvas.getContext('2d');
+
+      if (!context) {
+        throw new Error('Não foi possível preparar o canvas da partilha.');
+      }
+
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+      const pngBlob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            reject(new Error('Não foi possível gerar o PNG do time.'));
+            return;
+          }
+          resolve(blob);
+        }, 'image/png');
+      });
+
+      return pngBlob;
+    } finally {
+      URL.revokeObjectURL(svgUrl);
+    }
+  };
+
+  const downloadBlobFile = (blob: Blob, filename: string) => {
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(blobUrl);
+  };
+
+  const shareBlobFile = async (blob: Blob, filename: string, shareTitle: string, shareText: string) => {
+    const shareFile = new File([blob], filename, { type: 'image/png' });
+
+    if (navigator.share && navigator.canShare?.({ files: [shareFile] })) {
+      await navigator.share({
+        title: shareTitle,
+        text: shareText,
+        files: [shareFile],
+      });
+      return true;
+    }
+
+    downloadBlobFile(blob, filename);
+    return false;
+  };
+
+  const handleDownloadTeamsImage = async () => {
+    if (!drawResult) return;
+
+    try {
+      setIsExportingImage(true);
+      const blob = await createShareImageBlob(drawResult);
+      downloadBlobFile(blob, 'times-pelada-balanceada.png');
+      setShareFeedback('Imagem dos times guardada com sucesso.');
+    } catch (error) {
+      console.error(error);
+      setShareFeedback('Não consegui guardar a imagem agora.');
+    } finally {
+      setIsExportingImage(false);
+    }
+  };
+
+  const handleShareTeamsImage = async () => {
+    if (!drawResult) return;
+
+    try {
+      setIsExportingImage(true);
+      const blob = await createShareImageBlob(drawResult);
+      const shared = await shareBlobFile(
+        blob,
+        'times-pelada-balanceada.png',
+        'Times da pelada',
+        'Segue a imagem dos times sorteados.'
+      );
+
+      if (shared) {
+        setShareFeedback('Imagem pronta para partilha.');
+        return;
+      }
+
+      setShareFeedback('Partilha direta não disponível aqui. A imagem foi guardada para enviares no WhatsApp.');
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') {
+        setShareFeedback('Partilha cancelada.');
+      } else {
+        console.error(error);
+        setShareFeedback('Não consegui preparar a partilha agora.');
+      }
+    } finally {
+      setIsExportingImage(false);
+    }
+  };
+
+  const handleShareFinishedGame = async (game: GameHistory) => {
+    try {
+      setIsExportingImage(true);
+      const blob = await createShareImageBlob(game);
+      const shared = await shareBlobFile(
+        blob,
+        `resultado-${game.id}.png`,
+        'Último resultado da pelada',
+        `Resultado final: ${game.scoreA} X ${game.scoreB}`
+      );
+
+      setShareFeedback(
+        shared
+          ? 'Último resultado pronto para partilha.'
+          : 'Partilha direta não disponível aqui. A imagem do último resultado foi guardada.'
+      );
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') {
+        setShareFeedback('Partilha cancelada.');
+      } else {
+        console.error(error);
+        setShareFeedback('Não consegui preparar a imagem do último resultado.');
+      }
+    } finally {
+      setIsExportingImage(false);
+    }
+  };
+
   const [drawViewMode, setDrawViewMode] = useState<'field' | 'list'>('field');
 
   const getPositionOnField = (index: number, total: number, team?: 'A' | 'B', player?: Player) => {
     if (total === 0) return { top: '50%', left: '50%' };
-    
-    // Selection mode (Before balance) - Professional Aligned Grid
-    if (!team) {
-      const cols = 4; // Shift to 4 columns for selection to distinguish from match 2-column feel
-      const r = Math.floor(index / cols);
-      const c = index % cols;
-      const rows = Math.ceil(total / cols);
-      
-      const vPadding = 20; // More centered vertical
-      const hPadding = 15;
-      
-      const top = `${vPadding + (r * (60 / Math.max(1, rows - 1 || 1)))}%`;
-      const left = `${hPadding + (c * (70 / (cols - 1 || 1)))}%`;
-      return { top, left };
+
+    if (!player) {
+      const fallbackLeft = distributeLineSlots(total, 18, 82)[index] ?? 50;
+      return { top: '50%', left: `${fallbackLeft}%` };
     }
 
-    // Team result mode (After balance) - Strictly Separated Halves
-    const isTeamA = team === 'A';
-    
-    // Default fallback positions
-    let vPos = isTeamA ? 15 : 85;
-    let hPos = 50;
+    const playerPool = team
+      ? team === 'A'
+        ? drawResult?.teamA.players ?? []
+        : drawResult?.teamB.players ?? []
+      : allAvailablePlayers.filter((candidate) => selectedIds.includes(candidate.id));
 
-    if (player && drawResult) {
-      const teamPlayers = isTeamA ? drawResult.teamA.players : drawResult.teamB.players;
-      const playersInSamePos = teamPlayers.filter(p => p.position === player.position);
-      const posIdx = playersInSamePos.findIndex(p => p.id === player.id);
-      const posTotal = playersInSamePos.length;
+    const playersInSameLine = playerPool.filter((candidate) => candidate.position === player.position);
+    const playerIndexInLine = Math.max(
+      playersInSameLine.findIndex((candidate) => candidate.id === player.id),
+      0
+    );
+    const { slotLimit, padding, totalRows } = getLineConfig(player.position, playersInSameLine.length);
+    const rowIndex = Math.floor(playerIndexInLine / slotLimit);
+    const colIndex = playerIndexInLine % slotLimit;
+    const itemsBeforeRow = rowIndex * slotLimit;
+    const itemsInRow = Math.min(slotLimit, playersInSameLine.length - itemsBeforeRow);
+    const leftSlots = distributeLineSlots(itemsInRow, padding, 100 - padding);
+    const baseTop = FIELD_LINE_TOPS[team ?? 'selection'][player.position];
+    const verticalOffset = totalRows > 1 ? (rowIndex - (totalRows - 1) / 2) * 4.5 : 0;
 
-      // Strict Tactical Formation - 8 Stripes (4 per half)
-      // Pattern: Goal -> Dark (0-12.5) -> Light (12.5-25) -> Dark (25-37.5) -> Light (37.5-50)
-      
-      const vGoal = isTeamA ? 2 : 98;
-      const vDef = isTeamA ? 8 : 92;      // Inside dark stripe 1 (0-12.5)
-      const vMidDef = isTeamA ? 20 : 80;   // Inside light stripe 2 (12.5-25)
-      const vMidOff = isTeamA ? 32 : 68;   // Inside dark stripe 3 (25-37.5)
-      const vAtk = isTeamA ? 44 : 56;      // Inside light stripe 4 (37.5-50)
-
-      switch(player.position) {
-        case 'Goleiro': 
-          vPos = vGoal; 
-          hPos = 50; 
-          break;
-        case 'Zagueiro': 
-          vPos = vDef; 
-          hPos = posTotal === 1 ? 50 : 
-                 posTotal === 2 ? (28 + (posIdx * 44)) :
-                 posTotal === 3 ? (22 + (posIdx * 28)) :
-                 (18 + (posIdx * (64 / (posTotal - 1))));
-          break;
-        case 'Meia defensivo':
-          vPos = vMidDef;
-          hPos = posTotal === 1 ? 50 : 
-                 posTotal === 2 ? (25 + (posIdx * 50)) :
-                 posTotal === 3 ? (20 + (posIdx * 30)) :
-                 (15 + (posIdx * (70 / (posTotal - 1))));
-          break;
-        case 'Meia ofensivo': 
-          vPos = vMidOff; 
-          hPos = posTotal === 1 ? 50 : 
-                 posTotal === 2 ? (25 + (posIdx * 50)) :
-                 posTotal === 3 ? (20 + (posIdx * 30)) :
-                 (15 + (posIdx * (70 / (posTotal - 1))));
-          break;
-        case 'Atacante': 
-          vPos = vAtk; 
-          hPos = posTotal === 1 ? 50 :
-                 posTotal === 2 ? (32 + (posIdx * 36)) :
-                 (28 + (posIdx * (44 / (posTotal - 1))));
-          break;
-      }
-    }
-
-    return { top: `${vPos}%`, left: `${hPos}%` };
+    return {
+      top: `${baseTop + verticalOffset}%`,
+      left: `${leftSlots[colIndex] ?? 50}%`,
+    };
   };
 
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
@@ -503,7 +864,7 @@ export default function App() {
             <div className="inline-flex p-4 rounded-3xl bg-primary-emerald/10 text-primary-emerald mb-4 border border-primary-emerald/20">
               <Trophy size={48} />
             </div>
-            <h1 className="text-4xl font-black italic tracking-tighter text-white">SQUAD PRO</h1>
+            <h1 className="text-4xl font-black italic tracking-tighter text-slate-text">SQUAD PRO</h1>
             <p className="text-slate-muted font-bold text-sm uppercase tracking-widest">Acesso Restrito</p>
           </div>
 
@@ -513,7 +874,7 @@ export default function App() {
                 <label className="text-[10px] font-black text-slate-muted uppercase pl-1">Utilizador</label>
                 <input 
                   type="email"
-                  className="w-full bg-black/40 border border-slate-border rounded-xl px-4 py-4 text-sm focus:border-primary-emerald outline-none text-white transition-all"
+                  className="app-input py-4"
                   placeholder="seu@email.com"
                   value={loginEmail}
                   onChange={e => { setLoginEmail(e.target.value); setLoginError(false); }}
@@ -523,7 +884,7 @@ export default function App() {
                 <label className="text-[10px] font-black text-slate-muted uppercase pl-1">Senha</label>
                 <input 
                   type="password"
-                  className="w-full bg-black/40 border border-slate-border rounded-xl px-4 py-4 text-sm focus:border-primary-emerald outline-none text-white transition-all"
+                  className="app-input py-4"
                   placeholder="••••••"
                   value={loginPass}
                   onChange={e => { setLoginPass(e.target.value); setLoginError(false); }}
@@ -546,7 +907,7 @@ export default function App() {
           </div>
 
           <div className="text-center">
-            <p className="text-[10px] text-white/20 font-bold uppercase tracking-widest">Versão 2.4.0 • Pro Edition</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-muted opacity-70">Versão 2.4.0 • Pro Edition</p>
           </div>
         </motion.div>
       </div>
@@ -556,10 +917,10 @@ export default function App() {
   return (
     <div className="flex flex-col h-[100dvh] bg-slate-bg overflow-hidden safe-p-top">
       {/* Header Area */}
-      <header className="px-6 py-4 flex items-center justify-between z-20 shrink-0">
+      <header className="flex items-center justify-between px-4 py-3 z-20 shrink-0 sm:px-6 sm:py-4">
         <div className="flex items-center gap-2">
            <Trophy className="text-primary-emerald" size={24} />
-           <h1 className="font-black text-xl tracking-tighter italic text-white">SQUAD PRO</h1>
+           <h1 className="font-black text-xl tracking-tighter italic text-slate-text">SQUAD PRO</h1>
         </div>
         <div className="flex items-center gap-2">
           {activeTab === 'match' && selectedIds.length > 0 && (
@@ -602,11 +963,11 @@ export default function App() {
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 1.02 }}
-              className="h-full flex flex-col p-4 space-y-4 overflow-y-auto pb-32"
+              className="h-full flex flex-col space-y-4 overflow-y-auto px-3 py-3 pb-28 sm:p-4 sm:pb-32"
             >
               {!drawResult ? (
                 <>
-                  <div className="flex flex-col gap-4 mb-4">
+                  <div className="mb-3 flex flex-col gap-3 sm:mb-4 sm:gap-4">
                     <div className="flex items-center justify-between px-1">
                       <h2 className="text-[10px] font-black text-slate-muted uppercase tracking-widest flex items-center gap-2">
                          CONVOCAÇÃO DE CRAQUES
@@ -638,7 +999,7 @@ export default function App() {
                               "px-4 py-2 rounded-xl text-[10px] font-black tracking-widest transition-all uppercase flex items-center gap-2", 
                               drawViewMode === 'field' 
                                 ? "bg-primary-emerald text-white shadow-lg shadow-primary-emerald/30 scale-105" 
-                                : "text-slate-muted hover:text-white"
+                                : "text-slate-muted hover:text-slate-text"
                             )}
                           >
                             <Target size={14} />
@@ -650,7 +1011,7 @@ export default function App() {
                               "px-4 py-2 rounded-xl text-[10px] font-black tracking-widest transition-all uppercase flex items-center gap-2", 
                               drawViewMode === 'list' 
                                 ? "bg-primary-emerald text-white shadow-lg shadow-primary-emerald/30 scale-105" 
-                                : "text-slate-muted hover:text-white"
+                                : "text-slate-muted hover:text-slate-text"
                             )}
                           >
                             <LayoutList size={14} />
@@ -661,8 +1022,8 @@ export default function App() {
                   </div>
 
                   {drawViewMode === 'field' ? (
-                    <div className="flex flex-col items-center">
-                      <div className="soccer-field relative w-full aspect-[4/6] max-w-[340px] mx-auto shrink-0 shadow-2xl overflow-hidden select-none">
+                    <div className={cn("flex flex-col items-center", CENTER_STAGE_CLASS)}>
+                      <div className="soccer-field relative w-full aspect-[4/6] shrink-0 shadow-2xl overflow-hidden select-none">
                         <div className="field-goal-top" />
                         <div className="field-penalty-area-top" />
                         <div className="field-center-line" />
@@ -673,7 +1034,7 @@ export default function App() {
                         <div className="absolute inset-0 isolate pointer-events-none">
                           <AnimatePresence>
                             {allAvailablePlayers.filter(p => selectedIds.includes(p.id)).map((p, idx, arr) => {
-                              const pos = getPositionOnField(idx, arr.length);
+                              const pos = getPositionOnField(idx, arr.length, undefined, p);
                               return (
                                 <motion.div 
                                   key={p.id}
@@ -684,13 +1045,9 @@ export default function App() {
                                 >
                                   <SoccerJersey 
                                     color="#475569" 
-                                    label={p.name.split(' ').map(n => n[0]).filter((_, i) => i < 2).join('').toUpperCase()}
+                                    label={getPlayerInitials(p.name)}
+                                    playerName={getJerseyPlayerName(p.name)}
                                   />
-                                  <div className="mt-1 bg-black/80 backdrop-blur-sm px-2 py-0.5 rounded-md shadow-lg border border-white/10 max-w-[80px]">
-                                     <span className="text-[9px] font-black text-white uppercase truncate block w-full text-center leading-none">
-                                       {p.name.split(' ')[0]}
-                                     </span>
-                                  </div>
                                 </motion.div>
                               );
                             })}
@@ -704,20 +1061,22 @@ export default function App() {
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
                           exit={{ opacity: 0 }}
-                          className="absolute inset-0 bg-black/30 backdrop-blur-[2px] flex items-end p-4 z-40"
+                          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/35 p-4 backdrop-blur-[3px]"
+                          onClick={() => setShowImport(false)}
                         >
                           <motion.div 
-                             initial={{ y: 100 }}
-                             animate={{ y: 0 }}
-                             exit={{ y: 100 }}
-                             className="w-full bg-slate-panel/95 backdrop-blur-md border border-slate-border rounded-2xl p-5 shadow-2xl"
+                             initial={{ y: 24, opacity: 0, scale: 0.98 }}
+                             animate={{ y: 0, opacity: 1, scale: 1 }}
+                             exit={{ y: 24, opacity: 0, scale: 0.98 }}
+                             className="w-full max-w-[340px] rounded-2xl border border-slate-border bg-slate-panel/95 p-4 shadow-2xl backdrop-blur-md sm:max-w-[380px] sm:p-5"
+                             onClick={(e) => e.stopPropagation()}
                           >
                              <div className="flex justify-between items-center mb-3">
-                                <h3 className="text-xs font-black text-white italic">IMPORTAR LISTA</h3>
+                                <h3 className="text-xs font-black italic text-slate-text">IMPORTAR LISTA</h3>
                                 <button onClick={() => setShowImport(false)} className="text-slate-muted"><X size={18} /></button>
                              </div>
                              <textarea
-                                className="w-full h-32 bg-black/40 border border-slate-border rounded-xl p-3 text-[10px] font-mono outline-none mb-3 text-white placeholder:text-white/20"
+                                className="app-textarea mb-3 h-28 sm:h-32"
                                 placeholder={"1 - João\n2 - Pedro..."}
                                 value={importText}
                                 onChange={e => setImportText(e.target.value)}
@@ -729,7 +1088,7 @@ export default function App() {
                     </AnimatePresence>
                     
                     {selectedIds.length === 0 && !showImport && (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center text-white/20 p-8 text-center">
+                      <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center text-white/75">
                         <Target size={48} strokeWidth={1} className="mb-4 opacity-50" />
                         <p className="text-sm font-black italic tracking-widest uppercase">Escale seu time para o sorteio</p>
                       </div>
@@ -737,12 +1096,12 @@ export default function App() {
                     </div>
                   </div>
                 ) : (
-                  <div className="game-card p-4 shrink-0">
+                  <div className={cn("game-card p-4 shrink-0", CENTER_STAGE_CLASS)}>
                        <div className="text-[10px] font-black text-slate-muted uppercase tracking-widest mb-4 flex justify-between">
                           <span>SELECIONADOS</span>
                           <span className="text-primary-emerald italic">{selectedIds.length} ATLETAS</span>
                        </div>
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar">
+                       <div className="grid grid-cols-1 gap-2 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar sm:grid-cols-2">
                           {allAvailablePlayers.filter(p => selectedIds.includes(p.id)).length === 0 ? (
                             <div className="col-span-1 md:col-span-2 py-20 text-center opacity-20">
                                <Users size={32} className="mx-auto mb-2" />
@@ -756,7 +1115,7 @@ export default function App() {
                                     <div className="text-[11px] font-bold truncate text-primary-emerald uppercase leading-none mb-1">{p.name}</div>
                                     <div className="flex items-center gap-1.5 flex-wrap">
                                        <PositionBadge position={p.position} isSecondary />
-                                       <span className="text-[7px] font-bold text-white/40 uppercase">T:{p.skill} • V:{p.speed || 5}</span>
+                                       <span className="text-[7px] font-bold uppercase text-slate-muted">T:{p.skill} • V:{p.speed || 5}</span>
                                     </div>
                                  </div>
                                  <div className="flex gap-1">
@@ -806,7 +1165,7 @@ export default function App() {
                           </h2>
                           {(isEditing || showAddForm) && (
                             <button 
-                              onClick={() => { setIsEditing(null); setShowAddForm(false); setFormData({ name: '', position: 'Meio-campo', skill: 5, speed: 5, instagram: '', isFavorite: false }); }}
+                              onClick={() => { setIsEditing(null); setShowAddForm(false); setFormData({ name: '', position: 'Meia ofensivo', skill: 5, speed: 5, instagram: '', isFavorite: false }); }}
                               className="text-[10px] text-red-400 font-black"
                             >
                               CANCELAR
@@ -819,7 +1178,7 @@ export default function App() {
                               <input
                                 type="text"
                                 placeholder="Nome do Jogador"
-                                className="w-full bg-black/40 border border-slate-border rounded-xl px-4 py-3.5 text-sm focus:border-primary-emerald outline-none text-white transition-all"
+                                className="app-input"
                                 value={formData.name}
                                 onChange={e => setFormData({ ...formData, name: e.target.value })}
                               />
@@ -828,7 +1187,7 @@ export default function App() {
                               <input
                                 type="text"
                                 placeholder="Instagram (Ex: @atleta)"
-                                className="w-full bg-black/40 border border-slate-border rounded-xl px-4 py-3.5 text-sm focus:border-primary-emerald outline-none text-white transition-all"
+                                className="app-input"
                                 value={formData.instagram}
                                 onChange={e => setFormData({ ...formData, instagram: e.target.value })}
                               />
@@ -836,7 +1195,7 @@ export default function App() {
                             <div className="col-span-2">
                                <label className="text-[9px] font-black text-slate-muted uppercase mb-1 block">Posição</label>
                                <select
-                                 className="w-full bg-black/40 border border-slate-border rounded-xl px-2 py-3 text-sm outline-none appearance-none text-white font-bold"
+                                 className="app-select"
                                  value={formData.position}
                                  onChange={e => setFormData({ ...formData, position: e.target.value as Position })}
                                >
@@ -895,7 +1254,7 @@ export default function App() {
                                 <div className="text-[10px] font-black truncate tracking-tight text-primary-emerald uppercase leading-none mb-0.5">{p.name}</div>
                                 <div className="flex gap-1.5 items-center">
                                    <PositionBadge position={p.position} />
-                                   <div className="text-[7px] font-bold text-white/40 leading-none">T: {p.skill} • V: {p.speed || 5}</div>
+                                   <div className="text-[7px] font-bold leading-none text-slate-muted">T: {p.skill} • V: {p.speed || 5}</div>
                                    {p.isTemporary && <span className="text-[7px] font-black text-amber-500 uppercase tracking-tighter bg-amber-500/10 px-1 rounded">V</span>}
                                 </div>
                              </div>
@@ -935,19 +1294,21 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="fixed bottom-24 left-4 right-4 z-30">
-                    <button
-                      disabled={selectedIds.length < 2}
-                      onClick={handleDraw}
-                      className="ios-btn-primary h-16 text-lg shadow-2xl backdrop-blur-md bg-primary-emerald/90"
-                    >
-                      <RefreshCcw size={20} className={cn(selectedIds.length < 2 && "opacity-20", "animate-spin-slow")} />
-                      {selectedIds.length < 2 ? "SELECIONE +2" : "SORTEAR TIMES"}
-                    </button>
+                  <div className="fixed bottom-20 left-3 right-3 z-30 sm:bottom-24 sm:left-4 sm:right-4">
+                    <div className={CENTER_STAGE_CLASS}>
+                      <button
+                        disabled={selectedIds.length < 2}
+                        onClick={handleDraw}
+                        className="ios-btn-primary h-12 bg-primary-emerald/90 text-sm shadow-2xl backdrop-blur-md sm:h-14 sm:text-base"
+                      >
+                        <RefreshCcw size={20} className={cn(selectedIds.length < 2 && "opacity-20", "animate-spin-slow")} />
+                        {selectedIds.length < 2 ? "SELECIONE +2" : "SORTEAR TIMES"}
+                      </button>
+                    </div>
                   </div>
                 </>
               ) : (
-                <div className="space-y-6 pb-44">
+                <div className="space-y-5 pb-40 sm:space-y-6 sm:pb-44">
                   <div className="flex items-center justify-between px-1">
                      <button onClick={() => setDrawResult(null)} className="h-10 w-10 flex items-center justify-center bg-slate-panel border border-slate-border rounded-xl text-slate-muted">
                         <X size={18} />
@@ -957,10 +1318,10 @@ export default function App() {
                         <button 
                           onClick={() => setDrawViewMode('field')}
                           className={cn(
-                            "px-6 py-2.5 rounded-xl text-[11px] font-black tracking-widest transition-all uppercase flex items-center gap-2", 
+                            "flex items-center gap-1.5 rounded-xl px-4 py-2 text-[10px] font-black tracking-widest uppercase transition-all sm:gap-2 sm:px-6 sm:py-2.5 sm:text-[11px]", 
                             drawViewMode === 'field' 
                               ? "bg-primary-emerald text-white shadow-lg shadow-primary-emerald/30 scale-105" 
-                              : "text-slate-muted hover:text-white"
+                              : "text-slate-muted hover:text-slate-text"
                           )}
                         >
                           <Target size={16} className={drawViewMode === 'field' ? "animate-pulse" : ""} />
@@ -969,10 +1330,10 @@ export default function App() {
                         <button 
                           onClick={() => setDrawViewMode('list')}
                           className={cn(
-                            "px-6 py-2.5 rounded-xl text-[11px] font-black tracking-widest transition-all uppercase flex items-center gap-2", 
+                            "flex items-center gap-1.5 rounded-xl px-4 py-2 text-[10px] font-black tracking-widest uppercase transition-all sm:gap-2 sm:px-6 sm:py-2.5 sm:text-[11px]", 
                             drawViewMode === 'list' 
                               ? "bg-primary-emerald text-white shadow-lg shadow-primary-emerald/30 scale-105" 
-                              : "text-slate-muted hover:text-white"
+                              : "text-slate-muted hover:text-slate-text"
                           )}
                         >
                           <LayoutList size={16} />
@@ -982,7 +1343,7 @@ export default function App() {
 
                      <button 
                         onClick={handleDraw} 
-                        className="flex items-center gap-2 px-4 py-2 bg-slate-panel border border-slate-border rounded-xl text-primary-emerald font-black text-[10px] active:scale-95 transition-all"
+                        className="flex items-center gap-1.5 rounded-xl border border-slate-border bg-slate-panel px-3 py-2 text-[9px] font-black text-primary-emerald transition-all active:scale-95 sm:gap-2 sm:px-4 sm:text-[10px]"
                      >
                         <RefreshCcw size={14} /> RE-SORTEAR
                      </button>
@@ -991,8 +1352,8 @@ export default function App() {
                   <TeamBalanceDashboard result={drawResult} />
 
                   {drawViewMode === 'field' ? (
-                    <div className="flex flex-col items-center py-4 w-full">
-                      <div className="soccer-field relative w-full aspect-[4/6] max-w-[350px] mx-auto shrink-0 shadow-2xl border-white/20 select-none overflow-hidden">
+                    <div className={cn("flex flex-col items-center py-4", CENTER_STAGE_CLASS)}>
+                      <div className="soccer-field relative w-full aspect-[4/6] shrink-0 shadow-2xl border-white/20 select-none overflow-hidden">
                         {/* Field Markings */}
                         <div className="field-goal-top" />
                         <div className="field-penalty-area-top" />
@@ -1020,15 +1381,9 @@ export default function App() {
                               >
                                 <SoccerJersey 
                                   color={p.position === 'Goleiro' ? "#f59e0b" : "#10b981"} 
-                                  label={p.name.split(' ').map(n => n[0]).filter((_, i) => i < 2).join('').toUpperCase()}
+                                  label={getPlayerInitials(p.name)}
+                                  playerName={getJerseyPlayerName(p.name)}
                                 />
-                                <div className="mt-1.5 flex flex-col items-center pointer-events-none">
-                                  <div className="bg-black border-2 border-white/30 px-2 py-1 rounded shadow-2xl max-w-[85px]">
-                                     <span className="text-[10px] font-black text-white uppercase truncate block w-full text-center leading-none tracking-tight">
-                                       {p.name.split(' ')[0]}
-                                     </span>
-                                  </div>
-                                </div>
                               </motion.div>
                             );
                           })}
@@ -1050,15 +1405,9 @@ export default function App() {
                               >
                                  <SoccerJersey 
                                   color={p.position === 'Goleiro' ? "#f59e0b" : "#2563eb"} 
-                                  label={p.name.split(' ').map(n => n[0]).filter((_, i) => i < 2).join('').toUpperCase()}
+                                  label={getPlayerInitials(p.name)}
+                                  playerName={getJerseyPlayerName(p.name)}
                                 />
-                                <div className="mt-1.5 flex flex-col items-center pointer-events-none">
-                                  <div className="bg-black border-2 border-white/30 px-2 py-1 rounded shadow-2xl max-w-[85px]">
-                                     <span className="text-[10px] font-black text-white uppercase truncate block w-full text-center leading-none tracking-tight">
-                                       {p.name.split(' ')[0]}
-                                     </span>
-                                  </div>
-                                </div>
                               </motion.div>
                             );
                           })}
@@ -1066,9 +1415,9 @@ export default function App() {
                       </div>
                     </div>
                   ) : (
-                    <div className="space-y-4">
+                    <div className={cn("space-y-4", CENTER_STAGE_CLASS)}>
                       {/* Comparison Header */}
-                      <div className="grid grid-cols-2 gap-2 pb-4">
+                      <div className="grid grid-cols-1 gap-3 pb-4 sm:grid-cols-2 sm:gap-2">
                         {[
                           { team: drawResult.teamA, color: 'text-primary-emerald', border: 'border-primary-emerald', bg: 'bg-primary-emerald/10', title: 'TIME VERDE', jersey: '#10b981' },
                           { team: drawResult.teamB, color: 'text-blue-500', border: 'border-blue-500', bg: 'bg-blue-500/10', title: 'TIME AZUL', jersey: '#2563eb' }
@@ -1090,11 +1439,12 @@ export default function App() {
                                         <SoccerJersey 
                                           color={p.position === 'Goleiro' ? "#f59e0b" : t.jersey} 
                                           label={p.name.split(' ').map(n => n[0]).filter((_, i) => i < 2).join('').toUpperCase()}
+                                          playerName={getJerseyPlayerName(p.name)}
                                         />
                                       </div>
                                       <div className="flex-1 min-w-0">
                                          <div className={cn("text-[9px] font-black truncate uppercase leading-none mb-0.5", t.color)}>{p.name.split(' ')[0]}</div>
-                                         <div className="text-[6px] font-bold text-white/40 truncate uppercase">{p.position}</div>
+                                         <div className="text-[6px] font-bold uppercase text-slate-muted truncate">{p.position}</div>
                                       </div>
                                       <button 
                                         onClick={() => movePlayer(p.id, idx === 0 ? 'teamA' : 'teamB')}
@@ -1111,12 +1461,37 @@ export default function App() {
                     </div>
                   )}
 
-                  <div className="fixed bottom-24 left-4 right-4 z-40 space-y-3">
+                  <div className="fixed bottom-20 left-3 right-3 z-40 sm:bottom-24 sm:left-4 sm:right-4">
+                    <div className={cn("space-y-3", CENTER_STAGE_CLASS)}>
+                     <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                        <button
+                          onClick={handleDownloadTeamsImage}
+                          disabled={isExportingImage}
+                          className="ios-btn-secondary py-3 text-[11px] font-black uppercase tracking-wide sm:py-3.5 sm:text-xs"
+                        >
+                          <FileDown size={16} />
+                          {isExportingImage ? 'A gerar...' : 'Guardar imagem'}
+                        </button>
+                        <button
+                          onClick={handleShareTeamsImage}
+                          disabled={isExportingImage}
+                          className="ios-btn-secondary py-3 text-[11px] font-black uppercase tracking-wide sm:py-3.5 sm:text-xs"
+                        >
+                          <Share2 size={16} />
+                          {isExportingImage ? 'A gerar...' : 'Partilhar'}
+                        </button>
+                     </div>
+                     {shareFeedback && (
+                       <div className="rounded-2xl border border-slate-border bg-slate-panel/94 px-4 py-3 text-center text-[11px] font-bold text-slate-text shadow-xl">
+                         {shareFeedback}
+                       </div>
+                     )}
                      <div className="game-card p-2 border-primary-emerald/30 shadow-2xl">
-                        <button onClick={saveToHistory} className="w-full bg-primary-emerald text-white py-4 flex items-center justify-center gap-3 rounded-xl shadow-xl shadow-primary-emerald/20 active:scale-95 transition-all font-black italic text-lg tracking-widest">
+                        <button onClick={saveToHistory} className="w-full bg-primary-emerald text-white py-3.5 flex items-center justify-center gap-3 rounded-xl shadow-xl shadow-primary-emerald/20 active:scale-95 transition-all text-base font-black italic tracking-[0.2em] sm:py-4 sm:text-lg sm:tracking-widest">
                            JOGAR <Trophy size={20} />
                         </button>
                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1129,10 +1504,10 @@ export default function App() {
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
-              className="h-full p-4 overflow-y-auto pb-32"
+              className="h-full overflow-y-auto px-3 py-3 pb-28 sm:p-4 sm:pb-32"
             >
               <div className="flex justify-between items-end mb-6 px-1">
-                <h2 className="text-2xl font-black italic tracking-tighter text-primary-emerald">BASE DE DADOS</h2>
+                <h2 className="text-xl font-black italic tracking-tighter text-primary-emerald sm:text-2xl">BASE DE DADOS</h2>
                 <div className="flex items-end gap-4">
                   <div className="text-xs font-bold text-primary-emerald italic">{players.length} ATLETAS</div>
                   <button 
@@ -1161,7 +1536,7 @@ export default function App() {
                         {isEditing ? 'EDITAR ATLETA' : 'REGISTRAR CRAQUE'}
                       </h2>
                       <button 
-                        onClick={() => { setIsEditing(null); setShowAddForm(false); setFormData({ name: '', position: 'Meio-campo', skill: 5, speed: 5, instagram: '', isFavorite: false }); }}
+                        onClick={() => { setIsEditing(null); setShowAddForm(false); setFormData({ name: '', position: 'Meia ofensivo', skill: 5, speed: 5, instagram: '', isFavorite: false }); }}
                         className="text-[10px] text-red-400 font-black"
                       >
                         CANCELAR
@@ -1173,7 +1548,7 @@ export default function App() {
                           <input
                             type="text"
                             placeholder="Nome do Jogador"
-                            className="w-full bg-black/40 border border-slate-border rounded-xl px-4 py-3.5 text-sm focus:border-primary-emerald outline-none text-white transition-all"
+                            className="app-input"
                             value={formData.name}
                             onChange={e => setFormData({ ...formData, name: e.target.value })}
                           />
@@ -1182,7 +1557,7 @@ export default function App() {
                           <input
                             type="text"
                             placeholder="Instagram (Ex: @atleta)"
-                            className="w-full bg-black/40 border border-slate-border rounded-xl px-4 py-3.5 text-sm focus:border-primary-emerald outline-none text-white transition-all"
+                            className="app-input"
                             value={formData.instagram}
                             onChange={e => setFormData({ ...formData, instagram: e.target.value })}
                           />
@@ -1190,7 +1565,7 @@ export default function App() {
                         <div className="col-span-2">
                           <label className="text-[9px] font-black text-slate-muted uppercase mb-1 block">Posição</label>
                           <select
-                            className="w-full bg-black/40 border border-slate-border rounded-xl px-2 py-3 text-sm outline-none appearance-none text-white font-bold"
+                            className="app-select"
                             value={formData.position}
                             onChange={e => setFormData({ ...formData, position: e.target.value as Position })}
                           >
@@ -1242,6 +1617,11 @@ export default function App() {
                                 <div className="attribute-pill px-2.5 py-1 text-[10px] bg-primary-emerald/10 text-primary-emerald">T: {p.skill}</div>
                                 <div className="attribute-pill px-2.5 py-1 text-[10px] bg-blue-500/10 text-blue-400">V: {p.speed || 5}</div>
                              </div>
+                             {playerStatsById.get(p.id) && (
+                               <div className="attribute-pill px-2.5 py-1 text-[10px] bg-amber-500/10 text-amber-500">
+                                 W: {playerStatsById.get(p.id)?.wins}
+                               </div>
+                             )}
                              {p.instagram && <div className="text-[10px] text-zinc-500 font-bold tracking-tight">@{p.instagram}</div>}
                           </div>
                        </div>
@@ -1278,7 +1658,7 @@ export default function App() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 1.1 }}
-              className="h-full p-4 overflow-y-auto pb-32"
+              className="h-full overflow-y-auto px-3 py-3 pb-28 sm:p-4 sm:pb-32"
             >
               <div className="flex justify-between items-center mb-6 px-1">
                 <div className="flex flex-col">
@@ -1299,7 +1679,7 @@ export default function App() {
                 )}
               </div>
 
-              <div className="space-y-6">
+              <div className="space-y-4">
                 {history.length === 0 ? (
                    <div className="py-20 text-center opacity-20 bg-slate-panel rounded-3xl border border-slate-border">
                       <History size={64} className="mx-auto mb-4" />
@@ -1311,9 +1691,9 @@ export default function App() {
                       <div className="space-y-3">
                         <div className="text-[10px] font-black text-primary-emerald uppercase tracking-widest px-1">Partidas em Aberto</div>
                         {history.filter(g => g.scoreA === undefined).map(game => (
-                          <div key={game.id} className="game-card border-l-4 border-l-amber-500 bg-amber-500/5 relative overflow-hidden">
-                             <div className="p-5">
-                               <div className="flex justify-between items-start mb-4">
+                          <div key={game.id} className="game-card relative overflow-hidden border-l-4 border-l-amber-500 bg-amber-500/5">
+                             <div className="p-4">
+                               <div className="mb-3 flex items-start justify-between">
                                   <div className="text-[9px] font-black text-slate-muted italic uppercase tracking-widest">
                                      <span>{game.date}</span>
                                      <span className="text-amber-500 ml-2">PENDENTE</span>
@@ -1328,11 +1708,11 @@ export default function App() {
                                </div>
                                
                                {editingHistoryId === game.id ? (
-                                 <div className="space-y-4">
-                                    <div className="flex items-center gap-3">
+                                 <div className="space-y-3">
+                                    <div className="flex items-center gap-2">
                                        <input 
                                           type="number"
-                                          className="w-full bg-black/40 border border-slate-border rounded-xl px-3 py-4 text-center text-xl font-black text-primary-emerald outline-none"
+                                         className="app-input-compact text-primary-emerald"
                                           placeholder="TM A"
                                           value={editScoreA}
                                           onChange={e => setEditScoreA(e.target.value)}
@@ -1340,14 +1720,14 @@ export default function App() {
                                        <div className="text-white opacity-20 font-black">X</div>
                                        <input 
                                           type="number"
-                                          className="w-full bg-black/40 border border-slate-border rounded-xl px-3 py-4 text-center text-xl font-black text-blue-500 outline-none"
+                                          className="app-input-compact text-blue-500"
                                           placeholder="TM B"
                                           value={editScoreB}
                                           onChange={e => setEditScoreB(e.target.value)}
                                        />
                                     </div>
                                     <div className="flex gap-2">
-                                       <button onClick={() => updateGameScore(game.id)} className="flex-1 ios-btn-primary h-12 text-xs">FINALIZAR JOGO</button>
+                                       <button onClick={() => updateGameScore(game.id)} className="flex-1 ios-btn-primary h-10 text-[10px]">FINALIZAR</button>
                                        <button onClick={() => setEditingHistoryId(null)} className="px-4 bg-white/5 border border-white/10 rounded-xl text-slate-muted text-[10px] font-black uppercase">Sair</button>
                                     </div>
                                  </div>
@@ -1356,10 +1736,10 @@ export default function App() {
                                    onClick={() => setExpandedHistoryId(expandedHistoryId === game.id ? null : game.id)}
                                    className="cursor-pointer"
                                  >
-                                   <div className="flex items-center justify-between">
+                                   <div className="flex items-center justify-between gap-3">
                                       <div className="text-center flex-1">
                                          <div className="text-[9px] font-bold text-slate-muted mb-1 uppercase">Time Verde</div>
-                                         <div className="text-2xl font-black text-white/10 italic">?</div>
+                                         <div className="text-xl font-black italic text-white/10">?</div>
                                       </div>
                                       <button 
                                         onClick={(e) => {
@@ -1368,16 +1748,16 @@ export default function App() {
                                           setEditScoreA('');
                                           setEditScoreB('');
                                         }}
-                                        className="px-6 py-3 bg-amber-500 text-black rounded-xl font-black text-[10px] uppercase shadow-lg shadow-amber-500/20 active:scale-95 transition-all"
+                                        className="rounded-xl bg-amber-500 px-4 py-2.5 text-[9px] font-black uppercase text-black shadow-lg shadow-amber-500/20 transition-all active:scale-95"
                                       >
                                         DEFINIR PLACAR
                                       </button>
                                       <div className="text-center flex-1">
                                          <div className="text-[9px] font-bold text-slate-muted mb-1 uppercase">Time Azul</div>
-                                         <div className="text-2xl font-black text-white/10 italic">?</div>
+                                         <div className="text-xl font-black italic text-white/10">?</div>
                                       </div>
                                    </div>
-                                   <div className="mt-4 flex justify-center">
+                                   <div className="mt-3 flex justify-center">
                                       <span className="text-[8px] font-bold text-amber-500/40 uppercase tracking-[0.2em] animate-pulse">Clique para ver os times</span>
                                    </div>
                                  </div>
@@ -1392,14 +1772,14 @@ export default function App() {
                                     exit={{ height: 0, opacity: 0 }}
                                     className="border-t border-white/5 bg-black/20"
                                   >
-                                    <div className="p-4 grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2">
                                        <div className="space-y-2">
                                           <div className="text-[8px] font-black text-primary-emerald uppercase tracking-widest flex items-center gap-1">
                                             <Shield size={8} /> Time Verde ({game.teamA.players.length})
                                           </div>
                                           <div className="space-y-1">
                                             {game.teamA.players.map(p => (
-                                              <div key={p.id} className="flex items-center gap-2 text-[10px] text-white/60">
+                                              <div key={p.id} className="flex items-center gap-2 text-[10px] text-slate-muted">
                                                 <div className="w-1 h-1 rounded-full bg-primary-emerald" />
                                                 <span className="truncate">{p.name}</span>
                                               </div>
@@ -1412,7 +1792,7 @@ export default function App() {
                                           </div>
                                           <div className="space-y-1">
                                             {game.teamB.players.map(p => (
-                                              <div key={p.id} className="flex items-center gap-2 text-[10px] text-white/60">
+                                              <div key={p.id} className="flex items-center gap-2 text-[10px] text-slate-muted">
                                                 <div className="w-1 h-1 rounded-full bg-blue-500" />
                                                 <span className="truncate">{p.name}</span>
                                               </div>
@@ -1428,32 +1808,45 @@ export default function App() {
                       </div>
                     )}
 
-                    {history.some(g => g.scoreA !== undefined) && (
+                    {completedHistory.length > 0 && (
                       <div className="space-y-3">
                         <div className="text-[10px] font-black text-slate-muted uppercase tracking-widest px-1">Encerradas</div>
-                        {history.filter(g => g.scoreA !== undefined).map(game => (
-                            <div key={game.id} className="game-card border-l-4 border-l-primary-emerald relative overflow-hidden group">
-                               <div className="p-5">
-                                 <div className="flex justify-between items-start mb-4">
+                        {latestCompletedGame && (
+                          <div className="game-card relative overflow-hidden border-l-4 border-l-primary-emerald group">
+                               <div className="p-4">
+                                 <div className="mb-3 flex items-start justify-between">
                                     <div className="text-[9px] font-black text-slate-muted italic uppercase tracking-widest">
-                                       <span>{game.date}</span>
-                                       <span className="text-primary-emerald bg-primary-emerald/10 px-2 py-0.5 rounded ml-2 italic">Δ {game.skillDiff}</span>
+                                       <span>{latestCompletedGame.date}</span>
+                                       <span className="text-primary-emerald bg-primary-emerald/10 px-2 py-0.5 rounded ml-2 italic">Δ {latestCompletedGame.skillDiff}</span>
                                     </div>
-                                    <button 
-                                       onClick={(e) => { e.stopPropagation(); removeGame(game.id); }}
-                                       className="w-8 h-8 bg-red-500/10 text-red-500 rounded-lg flex items-center justify-center hover:bg-red-500/20 active:scale-95 transition-all border border-red-500/10"
-                                       title="Excluir partida"
-                                    >
-                                       <Trash2 size={14} />
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleShareFinishedGame(latestCompletedGame);
+                                        }}
+                                        disabled={isExportingImage}
+                                        className="rounded-lg bg-white/5 p-1.5 text-slate-muted hover:text-primary-emerald"
+                                        title="Partilhar último resultado"
+                                      >
+                                        <Share2 size={12} />
+                                      </button>
+                                      <button 
+                                         onClick={(e) => { e.stopPropagation(); removeGame(latestCompletedGame.id); }}
+                                         className="w-8 h-8 bg-red-500/10 text-red-500 rounded-lg flex items-center justify-center hover:bg-red-500/20 active:scale-95 transition-all border border-red-500/10"
+                                         title="Excluir partida"
+                                      >
+                                         <Trash2 size={14} />
+                                      </button>
+                                    </div>
                                  </div>
                                  
-                                 {editingHistoryId === game.id ? (
-                                   <div className="space-y-4">
-                                      <div className="flex items-center gap-3">
+                                 {editingHistoryId === latestCompletedGame.id ? (
+                                   <div className="space-y-3">
+                                      <div className="flex items-center gap-2">
                                          <input 
                                             type="number"
-                                            className="w-full bg-black/40 border border-slate-border rounded-xl px-3 py-4 text-center text-xl font-black text-primary-emerald outline-none"
+                                            className="app-input-compact text-primary-emerald"
                                             placeholder="TM A"
                                             value={editScoreA}
                                             onChange={e => setEditScoreA(e.target.value)}
@@ -1461,51 +1854,51 @@ export default function App() {
                                          <div className="text-white opacity-20 font-black">X</div>
                                          <input 
                                             type="number"
-                                            className="w-full bg-black/40 border border-slate-border rounded-xl px-3 py-4 text-center text-xl font-black text-blue-500 outline-none"
+                                            className="app-input-compact text-blue-500"
                                             placeholder="TM B"
                                             value={editScoreB}
                                             onChange={e => setEditScoreB(e.target.value)}
                                          />
                                       </div>
                                       <div className="flex gap-2">
-                                         <button onClick={() => updateGameScore(game.id)} className="flex-1 ios-btn-primary h-12 text-xs">ATUALIZAR</button>
+                                         <button onClick={() => updateGameScore(latestCompletedGame.id)} className="flex-1 ios-btn-primary h-10 text-[10px]">ATUALIZAR</button>
                                          <button onClick={() => setEditingHistoryId(null)} className="px-4 bg-white/5 border border-white/10 rounded-xl text-slate-muted text-[10px] font-black uppercase">Sair</button>
                                       </div>
                                    </div>
                                  ) : (
                                     <div 
-                                      onClick={() => setExpandedHistoryId(expandedHistoryId === game.id ? null : game.id)}
+                                      onClick={() => setExpandedHistoryId(expandedHistoryId === latestCompletedGame.id ? null : latestCompletedGame.id)}
                                       className="cursor-pointer"
                                     >
-                                      <div className="flex items-center justify-between px-2">
+                                      <div className="flex items-center justify-between gap-2 px-1">
                                          <div className="text-center flex-1">
                                             <div className="text-[9px] font-bold text-slate-muted mb-1 truncate uppercase">Time Verde</div>
-                                            <div className="text-3xl font-black text-primary-emerald italic leading-none">
-                                              {game.scoreA}
+                                            <div className="text-2xl font-black italic leading-none text-primary-emerald">
+                                              {latestCompletedGame.scoreA}
                                             </div>
                                          </div>
-                                         <div className="flex flex-col items-center px-4">
-                                            <div className="text-xl font-black text-slate-border italic opacity-20 mb-2">X</div>
+                                         <div className="flex flex-col items-center px-2">
+                                            <div className="mb-1 text-lg font-black italic text-slate-border opacity-20">X</div>
                                             <button 
                                               onClick={(e) => {
                                                 e.stopPropagation();
-                                                setEditingHistoryId(game.id);
-                                                setEditScoreA(String(game.scoreA));
-                                                setEditScoreB(String(game.scoreB));
+                                                setEditingHistoryId(latestCompletedGame.id);
+                                                setEditScoreA(String(latestCompletedGame.scoreA));
+                                                setEditScoreB(String(latestCompletedGame.scoreB));
                                               }}
-                                              className="p-2 bg-white/5 text-slate-muted hover:text-primary-emerald rounded-lg"
+                                              className="rounded-lg bg-white/5 p-1.5 text-slate-muted hover:text-primary-emerald"
                                             >
                                               <Edit2 size={12} />
                                             </button>
                                          </div>
                                          <div className="text-center flex-1">
                                             <div className="text-[9px] font-bold text-slate-muted mb-1 truncate uppercase">Time Azul</div>
-                                            <div className="text-3xl font-black text-blue-500 italic leading-none">
-                                              {game.scoreB}
+                                            <div className="text-2xl font-black italic leading-none text-blue-500">
+                                              {latestCompletedGame.scoreB}
                                             </div>
                                          </div>
                                       </div>
-                                      <div className="mt-4 flex justify-center">
+                                      <div className="mt-3 flex justify-center">
                                          <span className="text-[8px] font-bold text-white/10 uppercase tracking-[0.2em] group-hover:text-primary-emerald/30 transition-colors">Clique para ver os times</span>
                                       </div>
                                     </div>
@@ -1513,21 +1906,21 @@ export default function App() {
                                </div>
 
                                <AnimatePresence>
-                                {expandedHistoryId === game.id && (
+                                {expandedHistoryId === latestCompletedGame.id && (
                                   <motion.div 
                                     initial={{ height: 0, opacity: 0 }}
                                     animate={{ height: 'auto', opacity: 1 }}
                                     exit={{ height: 0, opacity: 0 }}
                                     className="border-t border-white/5 bg-black/20"
                                   >
-                                    <div className="p-4 grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2">
                                        <div className="space-y-2">
                                           <div className="text-[8px] font-black text-primary-emerald uppercase tracking-widest flex items-center gap-1">
-                                            <Shield size={8} /> Time Verde ({game.teamA.players.length})
+                                            <Shield size={8} /> Time Verde ({latestCompletedGame.teamA.players.length})
                                           </div>
                                           <div className="space-y-1">
-                                            {game.teamA.players.map(p => (
-                                              <div key={p.id} className="flex items-center gap-2 text-[10px] text-white/60">
+                                            {latestCompletedGame.teamA.players.map(p => (
+                                              <div key={p.id} className="flex items-center gap-2 text-[10px] text-slate-muted">
                                                 <div className="w-1 h-1 rounded-full bg-primary-emerald" />
                                                 <span className="truncate">{p.name}</span>
                                               </div>
@@ -1536,11 +1929,11 @@ export default function App() {
                                        </div>
                                        <div className="space-y-2">
                                           <div className="text-[8px] font-black text-blue-500 uppercase tracking-widest flex items-center gap-1">
-                                            <Shield size={8} /> Time Azul ({game.teamB.players.length})
+                                            <Shield size={8} /> Time Azul ({latestCompletedGame.teamB.players.length})
                                           </div>
                                           <div className="space-y-1">
-                                            {game.teamB.players.map(p => (
-                                              <div key={p.id} className="flex items-center gap-2 text-[10px] text-white/60">
+                                            {latestCompletedGame.teamB.players.map(p => (
+                                              <div key={p.id} className="flex items-center gap-2 text-[10px] text-slate-muted">
                                                 <div className="w-1 h-1 rounded-full bg-blue-500" />
                                                 <span className="truncate">{p.name}</span>
                                               </div>
@@ -1548,23 +1941,139 @@ export default function App() {
                                           </div>
                                        </div>
                                     </div>
-                                  </motion.div>
+                                 </motion.div>
                                 )}
                              </AnimatePresence>
+                          </div>
+                        )}
+
+                        {archivedCompletedGames.length > 0 && (
+                          <>
+                            <div className="text-[9px] font-black uppercase tracking-widest text-slate-muted px-1">Resultados antigos</div>
+                            <div className="flex flex-wrap gap-2">
+                              {archivedCompletedGames.map((game) => (
+                                <button
+                                  key={game.id}
+                                  onClick={() => setExpandedHistoryId(expandedHistoryId === game.id ? null : game.id)}
+                                  className={cn(
+                                    "h-[58px] w-[92px] rounded-xl border border-slate-border bg-slate-panel/70 px-2 py-1.5 text-left transition-all",
+                                    expandedHistoryId === game.id ? "border-primary-emerald bg-primary-emerald/8 shadow-lg shadow-primary-emerald/10" : "hover:border-primary-emerald/40"
+                                  )}
+                                >
+                                  <div className="flex h-full flex-col justify-between">
+                                    <div className="truncate text-[7px] font-black uppercase tracking-wide text-slate-muted">{game.date}</div>
+                                    <div className="text-center">
+                                      <div className="text-base font-black italic leading-none text-slate-text">{game.scoreA}<span className="px-1 text-slate-border/70">x</span>{game.scoreB}</div>
+                                      <div className="mt-0.5 text-[7px] font-bold uppercase tracking-wide text-slate-muted">Δ {game.skillDiff}</div>
+                                    </div>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+
+                            {archivedCompletedGames.find((game) => game.id === expandedHistoryId) && (
+                              <div className="game-card overflow-hidden border border-slate-border">
+                                {(() => {
+                                  const selectedGame = archivedCompletedGames.find((game) => game.id === expandedHistoryId)!;
+
+                                  return (
+                                    <>
+                                      <div className="flex items-center justify-between border-b border-white/5 bg-black/10 p-3">
+                                        <div>
+                                          <div className="text-[9px] font-black uppercase tracking-widest text-slate-muted">{selectedGame.date}</div>
+                                          <div className="mt-1 text-xs font-black text-slate-text">{selectedGame.scoreA} X {selectedGame.scoreB}</div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <button
+                                            onClick={() => handleShareFinishedGame(selectedGame)}
+                                            disabled={isExportingImage}
+                                            className="rounded-lg bg-white/5 p-1.5 text-slate-muted hover:text-primary-emerald"
+                                          >
+                                            <Share2 size={12} />
+                                          </button>
+                                        </div>
+                                      </div>
+                                      <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2">
+                                        <div className="space-y-2">
+                                          <div className="text-[8px] font-black text-primary-emerald uppercase tracking-widest flex items-center gap-1">
+                                            <Shield size={8} /> Time Verde ({selectedGame.teamA.players.length})
+                                          </div>
+                                          <div className="space-y-1">
+                                            {selectedGame.teamA.players.map((player) => (
+                                              <div key={player.id} className="flex items-center gap-2 text-[10px] text-slate-muted">
+                                                <div className="h-1 w-1 rounded-full bg-primary-emerald" />
+                                                <span className="truncate">{player.name}</span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                          <div className="text-[8px] font-black text-blue-500 uppercase tracking-widest flex items-center gap-1">
+                                            <Shield size={8} /> Time Azul ({selectedGame.teamB.players.length})
+                                          </div>
+                                          <div className="space-y-1">
+                                            {selectedGame.teamB.players.map((player) => (
+                                              <div key={player.id} className="flex items-center gap-2 text-[10px] text-slate-muted">
+                                                <div className="h-1 w-1 rounded-full bg-blue-500" />
+                                                <span className="truncate">{player.name}</span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </>
+                                  );
+                                })()}
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {playerWinRanking.length > 0 && completedHistory.length > 0 && (
+                      <div className="game-card border-primary-emerald/20 p-4">
+                        <div className="mb-4 flex items-center justify-between">
+                          <div>
+                            <div className="text-[10px] font-black uppercase tracking-widest text-primary-emerald">Ranking de vitórias</div>
+                            <div className="mt-1 text-[8px] font-black uppercase tracking-widest text-slate-muted">Resumo final após os placares definidos</div>
+                          </div>
+                          <Trophy size={18} className="text-primary-emerald" />
+                        </div>
+                        <div className="space-y-2">
+                          {playerWinRanking.map((player, index) => (
+                            <div key={player.id} className="flex items-center gap-3 rounded-2xl border border-slate-border bg-slate-panel/70 px-3 py-2.5">
+                              <div className={cn(
+                                "flex h-8 w-8 items-center justify-center rounded-xl text-sm font-black",
+                                index === 0 ? "bg-amber-500/15 text-amber-500" : index === 1 ? "bg-slate-300/10 text-slate-text" : index === 2 ? "bg-orange-500/15 text-orange-400" : "bg-white/5 text-slate-muted"
+                              )}>
+                                {index + 1}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate text-sm font-black text-slate-text">{player.name}</div>
+                                <div className="text-[9px] font-bold uppercase tracking-wide text-slate-muted">
+                                  {player.wins} vitórias • {player.draws} empates • {player.losses} derrotas
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-sm font-black text-primary-emerald">{player.winRate}%</div>
+                                <div className="text-[9px] font-bold uppercase tracking-wide text-slate-muted">{player.played} jogos</div>
+                              </div>
                             </div>
                           ))}
                         </div>
-                      )}
-                    </>
-                  )}
-                </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
               </motion.div>
             )}
         </AnimatePresence>
       </main>
 
       {/* Navigation Tab Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-slate-panel/90 backdrop-blur-2xl border-t border-slate-border px-8 pt-3 pb-8 flex justify-between items-center z-50 safe-mb-bottom">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between border-t border-slate-border bg-slate-panel/90 px-4 pt-2.5 pb-5 backdrop-blur-2xl safe-mb-bottom sm:px-8 sm:pt-3 sm:pb-8">
         <TabButton 
           active={activeTab === 'match'} 
           onClick={() => { setActiveTab('match'); setDrawResult(null); }}

@@ -103,6 +103,22 @@
   @apply bg-slate-panel border border-slate-border text-slate-text font-bold py-4 rounded-xl active:scale-95 transition-all w-full flex items-center justify-center gap-2;
 }
 
+.app-input {
+  @apply w-full rounded-xl border border-slate-border bg-slate-panel/92 px-4 py-3.5 text-base text-slate-text outline-none transition-all placeholder:text-slate-muted focus:border-primary-emerald sm:text-sm;
+}
+
+.app-input-compact {
+  @apply w-full rounded-xl border border-slate-border bg-slate-panel/92 px-3 py-3 text-center text-lg font-black text-slate-text outline-none placeholder:text-slate-muted focus:border-primary-emerald;
+}
+
+.app-textarea {
+  @apply w-full rounded-xl border border-slate-border bg-slate-panel/92 p-3 text-base font-mono text-slate-text outline-none placeholder:text-slate-muted focus:border-primary-emerald sm:text-xs;
+}
+
+.app-select {
+  @apply w-full appearance-none rounded-xl border border-slate-border bg-slate-panel/92 px-2 py-3 text-base font-bold text-slate-text outline-none focus:border-primary-emerald sm:text-sm;
+}
+
 /* Custom Checkbox Hidden Input */
 .player-checkbox {
   @apply absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10;
@@ -110,7 +126,7 @@
 
 /* Soccer Field Container */
 .soccer-field {
-  @apply relative w-full aspect-[4/6] bg-[#1a4a16] rounded-3xl overflow-hidden border-[6px] border-white/25 shadow-[inset_0_0_120px_rgba(0,0,0,0.5)];
+  @apply relative w-full aspect-[4/6] overflow-hidden rounded-2xl border-4 border-white/25 bg-[#1a4a16] shadow-[inset_0_0_120px_rgba(0,0,0,0.5)] sm:rounded-3xl sm:border-[6px];
   /* 8 Stripes (4 per half) - Starting with Dark (transparent) near goal */
   background-image: repeating-linear-gradient(
     to bottom,
@@ -122,7 +138,7 @@
 }
 
 .field-center-circle {
-  @apply absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-28 h-28 border-2 border-white/30 rounded-full flex items-center justify-center;
+  @apply absolute top-1/2 left-1/2 flex h-24 w-24 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white/30 sm:h-28 sm:w-28;
 }
 
 .field-center-circle::after {
@@ -163,4 +179,3 @@
 .field-player-node {
   @apply absolute transition-all duration-500 ease-out;
 }
-
