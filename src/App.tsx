@@ -368,9 +368,10 @@ export default function App() {
   }, [isDark]);
 
   const [isAuthenticated, setIsAuthenticated] = useLocalStorage<boolean>('pb-auth', false);
-  const [loginEmail, setLoginEmail] = useState('');
+  const [loginEmail, setLoginEmail] = useLocalStorage<string>('pb-login-email', '');
   const [loginPass, setLoginPass] = useState('');
   const [loginError, setLoginError] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
   const [activeTab, setActiveTab] = useState<Tab>('match');
   const [players, setPlayers] = useLocalStorage<Player[]>('pb-players', []);
@@ -386,6 +387,7 @@ export default function App() {
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
   const [isExportingImage, setIsExportingImage] = useState(false);
   const [shareFeedback, setShareFeedback] = useState<string | null>(null);
+  const userMenuRef = React.useRef<HTMLDivElement>(null);
 
   const allAvailablePlayers = useMemo(() => [...players, ...tempPlayersRegistry], [players, tempPlayersRegistry]);
 
@@ -494,6 +496,24 @@ export default function App() {
     const timeoutId = window.setTimeout(() => setShareFeedback(null), 3000);
     return () => window.clearTimeout(timeoutId);
   }, [shareFeedback]);
+
+  React.useEffect(() => {
+    if (!showUserMenu) return;
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      if (!userMenuRef.current) return;
+      if (userMenuRef.current.contains(event.target as Node)) return;
+      setShowUserMenu(false);
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+    };
+  }, [showUserMenu]);
 
   const handleAddPlayer = (e: React.FormEvent) => {
     e.preventDefault();
@@ -847,9 +867,17 @@ export default function App() {
     if (loginEmail === 'marcelomachado90@gmail.com' && loginPass === '123456') {
       setIsAuthenticated(true);
       setLoginError(false);
+      setShowUserMenu(false);
+      setLoginPass('');
     } else {
       setLoginError(true);
     }
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setShowUserMenu(false);
+    setLoginPass('');
   };
 
   if (!isAuthenticated) {
@@ -938,18 +966,34 @@ export default function App() {
           >
             {isDark ? <Sun size={18} /> : <Moon size={18} />}
           </button>
-          <div className="w-10 h-10 rounded-xl bg-slate-panel flex items-center justify-center border border-slate-border group relative">
-            <ShieldCheck size={18} className="text-primary-emerald" />
-            <div className="absolute top-full right-0 mt-2 p-3 bg-slate-panel border border-slate-border rounded-xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 min-w-[120px]">
-               <div className="text-[10px] font-black text-slate-muted uppercase mb-2">Usuário</div>
-               <div className="text-xs font-bold text-slate-text truncate mb-3">{loginEmail}</div>
-               <button 
-                onClick={() => setIsAuthenticated(false)}
-                className="w-full py-2 bg-red-500/10 text-red-500 rounded-lg text-[10px] font-black uppercase flex items-center justify-center gap-1.5"
-               >
-                 <LogOut size={12} /> Sair
-               </button>
-            </div>
+          <div ref={userMenuRef} className="relative">
+            <button
+              onClick={() => setShowUserMenu((prev) => !prev)}
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-border bg-slate-panel text-slate-text active:scale-95 transition-all"
+              aria-label="Abrir menu do utilizador"
+              aria-expanded={showUserMenu}
+            >
+              <ShieldCheck size={18} className="text-primary-emerald" />
+            </button>
+            <AnimatePresence>
+              {showUserMenu && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                  className="absolute right-0 top-full z-50 mt-2 min-w-[148px] rounded-xl border border-slate-border bg-slate-panel p-3 shadow-2xl"
+                >
+                  <div className="mb-2 text-[10px] font-black uppercase text-slate-muted">Utilizador</div>
+                  <div className="mb-3 break-all text-xs font-bold text-slate-text">{loginEmail}</div>
+                  <button
+                    onClick={handleLogout}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-red-500/10 py-2 text-[10px] font-black uppercase text-red-500"
+                  >
+                    <LogOut size={12} /> Sair
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       </header>
