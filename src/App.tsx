@@ -75,18 +75,18 @@ const FIELD_LINE_TOPS: Record<'selection' | 'A' | 'B', Record<Position, number>>
     Atacante: 22,
   },
   A: {
-    Goleiro: 8,
-    Zagueiro: 19,
-    'Meia defensivo': 30,
-    'Meia ofensivo': 40,
-    Atacante: 46,
+    Goleiro: 5,
+    Zagueiro: 15,
+    'Meia defensivo': 25,
+    'Meia ofensivo': 35,
+    Atacante: 44,
   },
   B: {
-    Goleiro: 92,
-    Zagueiro: 81,
-    'Meia defensivo': 70,
-    'Meia ofensivo': 60,
-    Atacante: 54,
+    Goleiro: 95,
+    Zagueiro: 85,
+    'Meia defensivo': 75,
+    'Meia ofensivo': 65,
+    Atacante: 56,
   },
 };
 
@@ -99,18 +99,18 @@ const FIELD_LINE_TOPS_MOBILE: Record<'selection' | 'A' | 'B', Record<Position, n
     Atacante: 20,
   },
   A: {
-    Goleiro: 8,
-    Zagueiro: 19,
-    'Meia defensivo': 30,
-    'Meia ofensivo': 41,
-    Atacante: 55,
+    Goleiro: 5,
+    Zagueiro: 15,
+    'Meia defensivo': 25,
+    'Meia ofensivo': 35,
+    Atacante: 44,
   },
   B: {
-    Goleiro: 92,
-    Zagueiro: 81,
-    'Meia defensivo': 70,
-    'Meia ofensivo': 59,
-    Atacante: 45,
+    Goleiro: 95,
+    Zagueiro: 85,
+    'Meia defensivo': 75,
+    'Meia ofensivo': 65,
+    Atacante: 56,
   },
 };
 
@@ -397,53 +397,57 @@ const PlayerAvatar = ({ instagram, name, size = "md" }: { instagram?: string, na
   );
 };
 
-const SoccerJersey = ({ color, label, playerName }: { color: string, label: string, playerName: string }) => (
-  <motion.div 
+const SoccerJersey = ({ color, label, playerName, compact = false }: { color: string, label: string, playerName: string, compact?: boolean }) => (
+  <motion.div
     initial={{ scale: 0.5, rotate: -10 }}
     animate={{ scale: 1, rotate: 0 }}
-    className="relative flex h-[54px] w-[78px] items-center justify-center sm:h-[84px] sm:w-[128px]"
+    className={cn(
+      "relative flex items-center justify-center",
+      compact
+        ? "h-[32px] w-[44px] sm:h-[48px] sm:w-[66px]"
+        : "h-[54px] w-[78px] sm:h-[84px] sm:w-[128px]"
+    )}
   >
-    <svg viewBox="0 0 100 100" className="h-8 w-8 drop-shadow-xl overflow-visible sm:h-14 sm:w-14">
+    <svg viewBox="0 0 100 100" className={cn("drop-shadow-xl overflow-visible", compact ? "h-[22px] w-[22px] sm:h-[32px] sm:w-[32px]" : "h-8 w-8 sm:h-14 sm:w-14")}>
       <defs>
         <linearGradient id="jerseyGradient" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" style={{ stopColor: color, stopOpacity: 1 }} />
           <stop offset="100%" style={{ stopColor: color, stopOpacity: 0.8 }} />
         </linearGradient>
       </defs>
-      {/* Back Plate / Shadow Effect */}
-      <path 
-        d="M20,20 L80,20 L88,45 L72,52 L72,95 L28,95 L28,52 L12,45 Z" 
-        fill="black" 
+      <path
+        d="M20,20 L80,20 L88,45 L72,52 L72,95 L28,95 L28,52 L12,45 Z"
+        fill="black"
         fillOpacity="0.3"
         transform="translate(2, 2)"
       />
-      {/* Jersey Body */}
-      <path 
-        d="M20,20 L80,20 L88,45 L72,52 L72,95 L28,95 L28,52 L12,45 Z" 
+      <path
+        d="M20,20 L80,20 L88,45 L72,52 L72,95 L28,95 L28,52 L12,45 Z"
         fill="url(#jerseyGradient)"
-        stroke="white" 
+        stroke="white"
         strokeWidth="2.5"
         strokeLinejoin="round"
       />
-      {/* Details/Trim */}
       <path d="M40,20 Q50,30 60,20" fill="none" stroke="white" strokeWidth="2.5" />
       <path d="M28,95 L72,95" fill="none" stroke="white" strokeWidth="1.5" strokeOpacity="0.5" />
-      
-      {/* Label (Initials) */}
-      <text 
-        x="50" y="56" 
-        fontSize="18" 
-        fontWeight="900" 
-        fill="white" 
-        textAnchor="middle" 
-        className="font-black italic"
+      <text
+        x="50" y="56"
+        fontSize="18"
+        fontWeight="900"
+        fill="white"
+        textAnchor="middle"
         style={{ filter: 'drop-shadow(1px 1px 1px rgba(0,0,0,0.5))' }}
       >
         {label}
       </text>
     </svg>
-    <div className="pointer-events-none absolute left-1/2 top-[54%] w-[72px] -translate-x-1/2 rounded-md border border-white/10 bg-black/82 px-1 py-0.5 shadow-2xl backdrop-blur-sm sm:w-[116px] sm:px-2 sm:py-1.5">
-      <span className="block break-words text-center text-[7px] font-black leading-[1.05] text-white sm:text-[10px]">
+    <div className={cn(
+      "pointer-events-none absolute left-1/2 top-[54%] -translate-x-1/2 rounded-md border border-white/10 bg-black/82 shadow-2xl backdrop-blur-sm",
+      compact
+        ? "w-[42px] px-0.5 py-0.5 sm:w-[62px] sm:px-1"
+        : "w-[72px] px-1 py-0.5 sm:w-[116px] sm:px-2 sm:py-1.5"
+    )}>
+      <span className={cn("block break-words text-center font-black leading-[1.05] text-white", compact ? "text-[5.5px] sm:text-[7px]" : "text-[7px] sm:text-[10px]")}>
         {playerName}
       </span>
     </div>
@@ -1036,6 +1040,128 @@ export default function App() {
     }
   };
 
+  const createFieldShareCardSvg = (match: ShareableMatch) => {
+    const W = 1000;
+    const H = 1500;
+    const fieldX = 30;
+    const fieldY = 100;
+    const fieldW = W - 60;
+    const fieldH = H - 220;
+
+    const px = (left: number) => fieldX + (left / 100) * fieldW;
+    const py = (top: number)  => fieldY + (top  / 100) * fieldH;
+
+    const renderPlayer = (player: Player, team: 'A' | 'B') => {
+      const playersInLine = (team === 'A' ? match.teamA : match.teamB).players
+        .filter(p => p.position === player.position || p.secondaryPosition === player.position);
+      const allInLine = (team === 'A' ? match.teamA : match.teamB).players.filter(p => p.position === player.position);
+      const idx = allInLine.findIndex(p => p.id === player.id);
+      const slotLimit = player.position === 'Goleiro' ? 1 : 4;
+      const rowIdx = Math.floor(idx / slotLimit);
+      const colIdx = idx % slotLimit;
+      const itemsInRow = Math.min(slotLimit, allInLine.length - rowIdx * slotLimit);
+      const totalRows = Math.ceil(allInLine.length / slotLimit);
+      const padding = 14;
+      const slots = Array.from({ length: itemsInRow }, (_, i) => padding + ((100 - padding * 2) * i) / (itemsInRow - 1 || 1));
+      const vertOff = totalRows > 1 ? (rowIdx - (totalRows - 1) / 2) * 7 : 0;
+      const baseTop = FIELD_LINE_TOPS[team][player.position];
+      const left = slots[colIdx] ?? 50;
+      const top = baseTop + vertOff;
+      const x = px(left);
+      const y = py(top);
+      const color = team === 'A'
+        ? (player.position === 'Goleiro' ? '#F59E0B' : '#10B981')
+        : (player.position === 'Goleiro' ? '#F59E0B' : '#2563EB');
+      const initials = escapeSvgText(player.name.split(' ').map(n => n[0]).filter((_, i) => i < 2).join('').toUpperCase());
+      const name = escapeSvgText(player.name.length > 12 ? player.name.substring(0, 11) + '…' : player.name);
+      return `
+        <circle cx="${x}" cy="${y}" r="34" fill="${color}" opacity="0.92" />
+        <circle cx="${x}" cy="${y}" r="34" fill="none" stroke="white" stroke-width="2.5" opacity="0.5" />
+        <text x="${x}" y="${y + 7}" text-anchor="middle" fill="white" font-size="22" font-weight="900" font-family="Inter, Arial, sans-serif">${initials}</text>
+        <rect x="${x - 48}" y="${y + 38}" width="96" height="24" rx="8" fill="rgba(0,0,0,0.75)" />
+        <text x="${x}" y="${y + 55}" text-anchor="middle" fill="white" font-size="16" font-weight="800" font-family="Inter, Arial, sans-serif">${name}</text>
+      `;
+    };
+
+    const teamAPlayers = match.teamA.players.map(p => renderPlayer(p, 'A')).join('');
+    const teamBPlayers = match.teamB.players.map(p => renderPlayer(p, 'B')).join('');
+
+    const scoreBar = match.scoreA !== undefined && match.scoreB !== undefined
+      ? `<text x="${W / 2}" y="${H - 48}" text-anchor="middle" fill="#F8FAFC" font-size="52" font-weight="900" font-family="Inter, Arial, sans-serif">${match.scoreA} × ${match.scoreB}</text>`
+      : `<text x="${W / 2}" y="${H - 48}" text-anchor="middle" fill="#64748B" font-size="24" font-weight="700" font-family="Inter, Arial, sans-serif">Pelada Balanceada</text>`;
+
+    return `
+      <svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+        <rect width="${W}" height="${H}" fill="#0F172A" />
+        <!-- Field -->
+        <rect x="${fieldX}" y="${fieldY}" width="${fieldW}" height="${fieldH}" rx="12" fill="#166534" />
+        <rect x="${fieldX}" y="${fieldY}" width="${fieldW}" height="${fieldH}" rx="12" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="3" />
+        <!-- Center line -->
+        <line x1="${fieldX}" y1="${fieldY + fieldH / 2}" x2="${fieldX + fieldW}" y2="${fieldY + fieldH / 2}" stroke="rgba(255,255,255,0.25)" stroke-width="2.5" />
+        <!-- Center circle -->
+        <circle cx="${W / 2}" cy="${fieldY + fieldH / 2}" r="80" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="2.5" />
+        <circle cx="${W / 2}" cy="${fieldY + fieldH / 2}" r="8" fill="rgba(255,255,255,0.4)" />
+        <!-- Penalty areas -->
+        <rect x="${fieldX + fieldW * 0.2}" y="${fieldY}" width="${fieldW * 0.6}" height="${fieldH * 0.14}" rx="4" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="2" />
+        <rect x="${fieldX + fieldW * 0.2}" y="${fieldY + fieldH * 0.86}" width="${fieldW * 0.6}" height="${fieldH * 0.14}" rx="4" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="2" />
+        <!-- Goal areas -->
+        <rect x="${fieldX + fieldW * 0.35}" y="${fieldY}" width="${fieldW * 0.3}" height="${fieldH * 0.055}" rx="3" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="2" />
+        <rect x="${fieldX + fieldW * 0.35}" y="${fieldY + fieldH * 0.945}" width="${fieldW * 0.3}" height="${fieldH * 0.055}" rx="3" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="2" />
+        <!-- Team labels -->
+        <rect x="${fieldX + 10}" y="${fieldY + 10}" width="160" height="36" rx="10" fill="rgba(16,185,129,0.25)" />
+        <text x="${fieldX + 90}" y="${fieldY + 34}" text-anchor="middle" fill="#10B981" font-size="20" font-weight="900" font-family="Inter, Arial, sans-serif">TIME VERDE</text>
+        <rect x="${fieldX + fieldW - 170}" y="${fieldY + fieldH - 46}" width="160" height="36" rx="10" fill="rgba(37,99,235,0.25)" />
+        <text x="${fieldX + fieldW - 90}" y="${fieldY + fieldH - 22}" text-anchor="middle" fill="#60A5FA" font-size="20" font-weight="900" font-family="Inter, Arial, sans-serif">TIME AZUL</text>
+        <!-- Players -->
+        ${teamAPlayers}
+        ${teamBPlayers}
+        <!-- Score / footer -->
+        ${scoreBar}
+      </svg>
+    `;
+  };
+
+  const handleShareFieldImage = async () => {
+    if (!drawResult) return;
+    try {
+      setIsExportingImage(true);
+      const shareableMatch = createShareableMatch(drawResult);
+      const svgMarkup = createFieldShareCardSvg(shareableMatch);
+      const svgBlob = new Blob([svgMarkup], { type: 'image/svg+xml;charset=utf-8' });
+      const svgUrl = URL.createObjectURL(svgBlob);
+      try {
+        const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => reject(new Error('Falha ao montar imagem do campo.'));
+          img.src = svgUrl;
+        });
+        const canvas = document.createElement('canvas');
+        canvas.width = 1000;
+        canvas.height = 1500;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('Canvas não disponível.');
+        ctx.drawImage(image, 0, 0, 1000, 1500);
+        const pngBlob = await new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob(blob => { if (!blob) reject(new Error('Falha ao gerar PNG.')); else resolve(blob); }, 'image/png');
+        });
+        const shared = await shareBlobFile(pngBlob, 'campo-pelada.png', 'Campo da pelada', 'Veja a distribuição no campo!');
+        setShareFeedback(shared ? 'Campo pronto para partilha.' : 'Imagem do campo guardada.');
+      } finally {
+        URL.revokeObjectURL(svgUrl);
+      }
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') {
+        setShareFeedback('Partilha cancelada.');
+      } else {
+        console.error(error);
+        setShareFeedback('Não consegui preparar a imagem do campo.');
+      }
+    } finally {
+      setIsExportingImage(false);
+    }
+  };
+
   const handleShareWidgets = async (widgets: WidgetData[]) => {
     if (widgets.length === 0) return;
     try {
@@ -1115,7 +1241,7 @@ export default function App() {
     const leftSlots = distributeLineSlots(itemsInRow, padding, 100 - padding);
     const fieldLineTops = isMobileViewport ? FIELD_LINE_TOPS_MOBILE : FIELD_LINE_TOPS;
     const baseTop = fieldLineTops[team ?? 'selection'][player.position];
-    const verticalOffset = totalRows > 1 ? (rowIndex - (totalRows - 1) / 2) * (isMobileViewport ? 10 : 6) : 0;
+    const verticalOffset = totalRows > 1 ? (rowIndex - (totalRows - 1) / 2) * (isMobileViewport ? 9 : 9) : 0;
 
     return {
       top: `${baseTop + verticalOffset}%`,
@@ -1804,7 +1930,7 @@ export default function App() {
 
                   {drawViewMode === 'field' ? (
                     <div className={cn("flex flex-col items-center py-4", CENTER_STAGE_CLASS)}>
-                      <div className="soccer-field relative w-full aspect-[4/6] shrink-0 shadow-2xl border-white/20 select-none overflow-hidden">
+                      <div className="soccer-field relative w-full aspect-[4/7] sm:aspect-[4/6] shrink-0 shadow-2xl border-white/20 select-none overflow-hidden">
                         {/* Field Markings */}
                         <div className="field-goal-top" />
                         <div className="field-penalty-area-top" />
@@ -1830,10 +1956,11 @@ export default function App() {
                                 style={{ zIndex }}
                                 onClick={() => movePlayer(p.id, 'teamA')}
                               >
-                                <SoccerJersey 
-                                  color={p.position === 'Goleiro' ? "#f59e0b" : "#10b981"} 
+                                <SoccerJersey
+                                  color={p.position === 'Goleiro' ? "#f59e0b" : "#10b981"}
                                   label={getPlayerInitials(p.name)}
                                   playerName={getJerseyPlayerName(p.name)}
+                                  compact
                                 />
                               </motion.div>
                             );
@@ -1854,10 +1981,11 @@ export default function App() {
                                 style={{ zIndex }}
                                 onClick={() => movePlayer(p.id, 'teamB')}
                               >
-                                 <SoccerJersey 
-                                  color={p.position === 'Goleiro' ? "#f59e0b" : "#2563eb"} 
+                                <SoccerJersey
+                                  color={p.position === 'Goleiro' ? "#f59e0b" : "#2563eb"}
                                   label={getPlayerInitials(p.name)}
                                   playerName={getJerseyPlayerName(p.name)}
+                                  compact
                                 />
                               </motion.div>
                             );
@@ -1914,22 +2042,30 @@ export default function App() {
 
                   <div className="fixed bottom-20 left-3 right-3 z-40 sm:bottom-24 sm:left-4 sm:right-4">
                     <div className={cn("space-y-3", CENTER_STAGE_CLASS)}>
-                     <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                     <div className="grid grid-cols-3 gap-2 sm:gap-3">
                         <button
                           onClick={handleDownloadTeamsImage}
                           disabled={isExportingImage}
-                          className="ios-btn-secondary py-3 text-[11px] font-black uppercase tracking-wide sm:py-3.5 sm:text-xs"
+                          className="ios-btn-secondary py-3 text-[10px] font-black uppercase tracking-wide sm:py-3.5 sm:text-[11px]"
                         >
-                          <FileDown size={16} />
-                          {isExportingImage ? 'A gerar...' : 'Guardar imagem'}
+                          <FileDown size={15} />
+                          {isExportingImage ? 'A gerar...' : 'Guardar'}
                         </button>
                         <button
                           onClick={handleShareTeamsImage}
                           disabled={isExportingImage}
-                          className="ios-btn-secondary py-3 text-[11px] font-black uppercase tracking-wide sm:py-3.5 sm:text-xs"
+                          className="ios-btn-secondary py-3 text-[10px] font-black uppercase tracking-wide sm:py-3.5 sm:text-[11px]"
                         >
-                          <Share2 size={16} />
-                          {isExportingImage ? 'A gerar...' : 'Partilhar'}
+                          <Share2 size={15} />
+                          {isExportingImage ? 'A gerar...' : 'Lista'}
+                        </button>
+                        <button
+                          onClick={handleShareFieldImage}
+                          disabled={isExportingImage}
+                          className="ios-btn-secondary py-3 text-[10px] font-black uppercase tracking-wide sm:py-3.5 sm:text-[11px]"
+                        >
+                          <Share2 size={15} />
+                          {isExportingImage ? 'A gerar...' : 'Campo'}
                         </button>
                      </div>
                      {shareFeedback && (
