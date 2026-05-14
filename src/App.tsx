@@ -1,13 +1,13 @@
 import React, { useState, useMemo } from 'react';
-import { 
-  Users, 
-  UserPlus, 
-  Trophy, 
-  History, 
-  Trash2, 
-  Edit2, 
-  CheckCircle2, 
-  RefreshCcw, 
+import {
+  Users,
+  UserPlus,
+  Trophy,
+  History,
+  Trash2,
+  Edit2,
+  CheckCircle2,
+  RefreshCcw,
   Shield,
   Sword,
   ShieldCheck,
@@ -22,10 +22,12 @@ import {
   LogOut
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import type { Session } from '@supabase/supabase-js';
 import { Player, Position, DrawResult, GameHistory, Team } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { balanceTeams } from './utils/balanceAlgorithm';
 import { cn } from './lib/utils';
+import { supabase, dbPlayerToPlayer, dbGameToHistory } from './lib/supabase';
 
 type Tab = 'players' | 'match' | 'history';
 
@@ -401,15 +403,53 @@ export default function App() {
     }
   }, [isDark]);
 
-  const [isAuthenticated, setIsAuthenticated] = useLocalStorage<boolean>('pb-auth', false);
-  const [loginEmail, setLoginEmail] = useLocalStorage<string>('pb-login-email', '');
+  const [session, setSession] = useState<Session | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [loginEmail, setLoginEmail] = useState('');
   const [loginPass, setLoginPass] = useState('');
   const [loginError, setLoginError] = useState(false);
+  const [loginErrorMsg, setLoginErrorMsg] = useState('Credenciais Inválidas');
+  const [isSignUpMode, setIsSignUpMode] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
 
   const [activeTab, setActiveTab] = useState<Tab>('match');
-  const [players, setPlayers] = useLocalStorage<Player[]>('pb-players', []);
-  const [history, setHistory] = useLocalStorage<GameHistory[]>('pb-history', []);
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [history, setHistory] = useState<GameHistory[]>([]);
+
+  // Supabase auth listener
+  React.useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setAuthLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Fetch players and history when user signs in
+  React.useEffect(() => {
+    if (!session) {
+      setPlayers([]);
+      setHistory([]);
+      return;
+    }
+
+    const fetchData = async () => {
+      const [playersRes, historyRes] = await Promise.all([
+        supabase.from('players').select('*').order('created_at', { ascending: true }),
+        supabase.from('game_history').select('*').order('created_at', { ascending: false }),
+      ]);
+
+      if (playersRes.data) setPlayers(playersRes.data.map(dbPlayerToPlayer));
+      if (historyRes.data) setHistory(historyRes.data.map(dbGameToHistory));
+    };
+
+    fetchData();
+  }, [session]);
   
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [tempPlayersRegistry, setTempPlayersRegistry] = useState<Player[]>([]);
@@ -561,19 +601,29 @@ export default function App() {
     };
   }, [showUserMenu]);
 
-  const handleAddPlayer = (e: React.FormEvent) => {
+  const handleAddPlayer = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim()) return;
+    if (!formData.name.trim() || !session) return;
 
     if (isEditing) {
       const updatedData = { ...formData, instagram: formData.instagram.replace('@', '') };
-      
-      // Update permanent players if it's a permanent player ID
+      const isPermPlayer = players.some(p => p.id === isEditing);
+
+      if (isPermPlayer) {
+        await supabase.from('players').update({
+          name: updatedData.name,
+          position: updatedData.position,
+          secondary_position: updatedData.secondaryPosition ?? null,
+          skill: updatedData.skill,
+          speed: updatedData.speed ?? null,
+          instagram: updatedData.instagram,
+          is_favorite: updatedData.isFavorite,
+        }).eq('id', isEditing);
+      }
+
       setPlayers(prev => prev.map(p => p.id === isEditing ? { ...p, ...updatedData } : p));
-      
-      // Update temporary players if it's a temporary ID
       setTempPlayersRegistry(prev => prev.map(p => p.id === isEditing ? { ...p, ...updatedData } : p));
-      
+
       setIsEditing(null);
       setShowAddForm(false);
     } else {
@@ -582,14 +632,31 @@ export default function App() {
         ...formData,
         instagram: formData.instagram.replace('@', '')
       };
+
+      await supabase.from('players').insert({
+        id: newPlayer.id,
+        user_id: session.user.id,
+        name: newPlayer.name,
+        position: newPlayer.position,
+        secondary_position: newPlayer.secondaryPosition ?? null,
+        skill: newPlayer.skill,
+        speed: newPlayer.speed ?? null,
+        instagram: newPlayer.instagram,
+        is_favorite: newPlayer.isFavorite ?? false,
+      });
+
       setPlayers(prev => [...prev, newPlayer]);
       setShowAddForm(false);
     }
     setFormData({ name: '', position: 'Meia ofensivo', skill: 5, speed: 5, instagram: '', isFavorite: false });
   };
 
-  const removePlayer = (id: string) => {
+  const removePlayer = async (id: string) => {
     if (confirm('Deseja realmente apagar este atleta?')) {
+      const isPermPlayer = players.some(p => p.id === id);
+      if (isPermPlayer) {
+        await supabase.from('players').delete().eq('id', id);
+      }
       setPlayers(prev => prev.filter(p => p.id !== id));
       setTempPlayersRegistry(prev => prev.filter(p => p.id !== id));
       setSelectedIds(prev => prev.filter(pId => pId !== id));
@@ -830,8 +897,8 @@ export default function App() {
   const [editScoreA, setEditScoreA] = useState('');
   const [editScoreB, setEditScoreB] = useState('');
 
-  const saveToHistory = () => {
-    if (!drawResult) return;
+  const saveToHistory = async () => {
+    if (!drawResult || !session) return;
     const newGame: GameHistory = {
       id: crypto.randomUUID(),
       date: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }),
@@ -841,6 +908,18 @@ export default function App() {
       scoreA: undefined,
       scoreB: undefined
     };
+
+    await supabase.from('game_history').insert({
+      id: newGame.id,
+      user_id: session.user.id,
+      date: newGame.date,
+      team_a: newGame.teamA,
+      team_b: newGame.teamB,
+      score_a: null,
+      score_b: null,
+      skill_diff: newGame.skillDiff,
+    });
+
     setHistory(prev => [newGame, ...prev]);
     setDrawResult(null);
     setSelectedIds([]);
@@ -850,12 +929,14 @@ export default function App() {
     setActiveTab('history');
   };
 
-  const updateGameScore = (id: string) => {
+  const updateGameScore = async (id: string) => {
     const sA = parseInt(editScoreA);
     const sB = parseInt(editScoreB);
     if (isNaN(sA) || isNaN(sB)) return;
 
-    setHistory(prev => prev.map(game => 
+    await supabase.from('game_history').update({ score_a: sA, score_b: sB }).eq('id', id);
+
+    setHistory(prev => prev.map(game =>
       game.id === id ? { ...game, scoreA: sA, scoreB: sB } : game
     ));
     setEditingHistoryId(null);
@@ -863,8 +944,9 @@ export default function App() {
     setEditScoreB('');
   };
 
-  const removeGame = (id: string) => {
+  const removeGame = async (id: string) => {
     if (confirm('Deseja realmente apagar este registro do histórico?')) {
+      await supabase.from('game_history').delete().eq('id', id);
       setHistory(prev => prev.filter(g => g.id !== id));
     }
   };
@@ -909,28 +991,53 @@ export default function App() {
     });
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (loginEmail === 'marcelomachado90@gmail.com' && loginPass === '123456') {
-      setIsAuthenticated(true);
-      setLoginError(false);
-      setShowUserMenu(false);
-      setLoginPass('');
+    const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPass });
+    if (error) {
+      setLoginError(true);
+      setLoginErrorMsg('Credenciais Inválidas');
     } else {
+      setLoginError(false);
+      setLoginPass('');
+    }
+  };
+
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const { error } = await supabase.auth.signUp({ email: loginEmail, password: loginPass });
+    if (error) {
+      setLoginError(true);
+      setLoginErrorMsg(error.message);
+    } else {
+      setLoginError(false);
+      setLoginPass('');
+      setIsSignUpMode(false);
+      setLoginErrorMsg('Verifique seu e-mail para confirmar a conta.');
       setLoginError(true);
     }
   };
 
-  const handleLogout = () => {
-    setIsAuthenticated(false);
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     setShowUserMenu(false);
     setLoginPass('');
   };
 
-  if (!isAuthenticated) {
+  if (authLoading) {
+    return (
+      <div className="flex h-[100dvh] bg-slate-bg items-center justify-center">
+        <div className="text-primary-emerald animate-pulse">
+          <Trophy size={48} />
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) {
     return (
       <div className="flex flex-col h-[100dvh] bg-slate-bg items-center justify-center p-6 safe-p-top">
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="w-full max-w-sm space-y-8"
@@ -940,14 +1047,16 @@ export default function App() {
               <Trophy size={48} />
             </div>
             <h1 className="text-4xl font-black italic tracking-tighter text-slate-text">SQUAD PRO</h1>
-            <p className="text-slate-muted font-bold text-sm uppercase tracking-widest">Acesso Restrito</p>
+            <p className="text-slate-muted font-bold text-sm uppercase tracking-widest">
+              {isSignUpMode ? 'Criar Conta' : 'Acesso Restrito'}
+            </p>
           </div>
 
           <div className="game-card p-6 space-y-6 border-primary-emerald/20 shadow-2xl">
-            <form onSubmit={handleLogin} className="space-y-4">
+            <form onSubmit={isSignUpMode ? handleSignUp : handleLogin} className="space-y-4">
               <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-muted uppercase pl-1">Utilizador</label>
-                <input 
+                <label className="text-[10px] font-black text-slate-muted uppercase pl-1">E-mail</label>
+                <input
                   type="email"
                   className="app-input py-4"
                   placeholder="seu@email.com"
@@ -957,7 +1066,7 @@ export default function App() {
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-muted uppercase pl-1">Senha</label>
-                <input 
+                <input
                   type="password"
                   className="app-input py-4"
                   placeholder="••••••"
@@ -965,20 +1074,31 @@ export default function App() {
                   onChange={e => { setLoginPass(e.target.value); setLoginError(false); }}
                 />
               </div>
-              
+
               {loginError && (
-                <motion.p 
+                <motion.p
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                  className="text-red-400 text-[10px] font-black text-center uppercase tracking-widest"
+                  className={cn(
+                    "text-[10px] font-black text-center uppercase tracking-widest",
+                    loginErrorMsg.startsWith('Verifique') ? 'text-primary-emerald' : 'text-red-400'
+                  )}
                 >
-                  Credenciais Inválidas
+                  {loginErrorMsg}
                 </motion.p>
               )}
 
               <button type="submit" className="ios-btn-primary h-14 mt-4 text-sm">
-                ENTRAR NO SISTEMA
+                {isSignUpMode ? 'CRIAR CONTA' : 'ENTRAR NO SISTEMA'}
               </button>
             </form>
+
+            <button
+              type="button"
+              onClick={() => { setIsSignUpMode(v => !v); setLoginError(false); }}
+              className="w-full text-center text-[10px] font-black text-slate-muted uppercase tracking-widest"
+            >
+              {isSignUpMode ? 'Já tem conta? Entrar' : 'Não tem conta? Criar'}
+            </button>
           </div>
 
           <div className="text-center">
@@ -1031,7 +1151,7 @@ export default function App() {
                   className="absolute right-0 top-full z-50 mt-2 min-w-[148px] rounded-xl border border-slate-border bg-slate-panel p-3 shadow-2xl"
                 >
                   <div className="mb-2 text-[10px] font-black uppercase text-slate-muted">Utilizador</div>
-                  <div className="mb-3 break-all text-xs font-bold text-slate-text">{loginEmail}</div>
+                  <div className="mb-3 break-all text-xs font-bold text-slate-text">{session?.user?.email}</div>
                   <button
                     onClick={handleLogout}
                     className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-red-500/10 py-2 text-[10px] font-black uppercase text-red-500"
@@ -1758,8 +1878,9 @@ export default function App() {
                 </div>
                 {history.length > 0 && (
                   <button 
-                    onClick={() => {
+                    onClick={async () => {
                       if(confirm('Deseja apagar TODO o histórico de partidas? Esta ação não pode ser desfeita.')) {
+                        await supabase.from('game_history').delete().not('id', 'is', null);
                         setHistory([]);
                       }
                     }}
