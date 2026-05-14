@@ -40,6 +40,8 @@ type PlayerWinStats = {
   played: number;
   goalsFor: number;
   goalsAgainst: number;
+  goalDiff: number;
+  points: number;
   winRate: number;
 };
 
@@ -99,16 +101,16 @@ const FIELD_LINE_TOPS_MOBILE: Record<'selection' | 'A' | 'B', Record<Position, n
   A: {
     Goleiro: 8,
     Zagueiro: 19,
-    'Meia defensivo': 31,
-    'Meia ofensivo': 43,
-    Atacante: 54,
+    'Meia defensivo': 30,
+    'Meia ofensivo': 41,
+    Atacante: 55,
   },
   B: {
     Goleiro: 92,
     Zagueiro: 81,
-    'Meia defensivo': 69,
-    'Meia ofensivo': 57,
-    Atacante: 46,
+    'Meia defensivo': 70,
+    'Meia ofensivo': 59,
+    Atacante: 45,
   },
 };
 
@@ -203,24 +205,150 @@ const createShareCardSvg = (match: ShareableMatch) => {
   `;
 };
 
+const createRankingShareCardSvg = (ranking: PlayerWinStats[], date: string) => {
+  const width = 1200;
+  const rowHeight = 80;
+  const headerH = 220;
+  const colHeaderH = 60;
+  const footerH = 80;
+  const height = headerH + colHeaderH + ranking.length * rowHeight + footerH + 40;
+
+  const cols = [
+    { label: '#',     x: 60,   w: 60,  align: 'middle' },
+    { label: 'NOME',  x: 150,  w: 400, align: 'start'  },
+    { label: 'J',     x: 590,  w: 80,  align: 'middle' },
+    { label: 'V',     x: 680,  w: 80,  align: 'middle' },
+    { label: 'E',     x: 760,  w: 80,  align: 'middle' },
+    { label: 'D',     x: 840,  w: 80,  align: 'middle' },
+    { label: 'GF',    x: 920,  w: 80,  align: 'middle' },
+    { label: 'GC',    x: 1000, w: 80,  align: 'middle' },
+    { label: 'APROV', x: 1100, w: 90,  align: 'middle' },
+  ];
+
+  const headerRow = cols.map(c =>
+    `<text x="${c.align === 'middle' ? c.x + c.w / 2 : c.x}" y="${headerH + 38}" text-anchor="${c.align}" fill="#64748B" font-size="20" font-weight="900" font-family="Inter, Arial, sans-serif" letter-spacing="1">${c.label}</text>`
+  ).join('');
+
+  const rows = ranking.map((p, i) => {
+    const y = headerH + colHeaderH + i * rowHeight;
+    const isTop3 = i < 3;
+    const rowBg = i % 2 === 0 ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.0)';
+    const posColor = i === 0 ? '#F59E0B' : i === 1 ? '#CBD5E1' : i === 2 ? '#F97316' : '#64748B';
+    const nameColor = isTop3 ? '#F8FAFC' : '#CBD5E1';
+
+    const cells = [
+      { x: cols[0].x + cols[0].w / 2, val: String(i + 1),       anchor: 'middle', fill: posColor,    size: 26, weight: 900 },
+      { x: cols[1].x,                  val: p.name.length > 18 ? p.name.substring(0, 17) + '…' : p.name, anchor: 'start', fill: nameColor, size: 26, weight: 800 },
+      { x: cols[2].x + cols[2].w / 2, val: String(p.played),    anchor: 'middle', fill: '#94A3B8',   size: 24, weight: 700 },
+      { x: cols[3].x + cols[3].w / 2, val: String(p.wins),      anchor: 'middle', fill: '#10B981',   size: 24, weight: 800 },
+      { x: cols[4].x + cols[4].w / 2, val: String(p.draws),     anchor: 'middle', fill: '#94A3B8',   size: 24, weight: 700 },
+      { x: cols[5].x + cols[5].w / 2, val: String(p.losses),    anchor: 'middle', fill: '#F87171',   size: 24, weight: 700 },
+      { x: cols[6].x + cols[6].w / 2, val: String(p.goalsFor),  anchor: 'middle', fill: '#60A5FA',   size: 24, weight: 700 },
+      { x: cols[7].x + cols[7].w / 2, val: String(p.goalsAgainst), anchor: 'middle', fill: '#94A3B8', size: 24, weight: 700 },
+      { x: cols[8].x + cols[8].w / 2, val: `${p.winRate}%`,     anchor: 'middle', fill: p.winRate >= 60 ? '#10B981' : p.winRate >= 40 ? '#F59E0B' : '#F87171', size: 24, weight: 900 },
+    ];
+
+    return `
+      <rect x="40" y="${y}" width="${width - 80}" height="${rowHeight}" rx="0" fill="${rowBg}" />
+      ${isTop3 ? `<rect x="40" y="${y}" width="4" height="${rowHeight}" fill="${posColor}" />` : ''}
+      ${cells.map(c => `<text x="${c.x}" y="${y + rowHeight / 2 + 9}" text-anchor="${c.anchor}" fill="${c.fill}" font-size="${c.size}" font-weight="${c.weight}" font-family="Inter, Arial, sans-serif">${escapeSvgText(c.val)}</text>`).join('')}
+    `;
+  }).join('');
+
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+      <defs>
+        <linearGradient id="bg" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#14532D" />
+          <stop offset="60%" stop-color="#0F172A" />
+          <stop offset="100%" stop-color="#020617" />
+        </linearGradient>
+      </defs>
+      <rect width="${width}" height="${height}" fill="url(#bg)" />
+      <text x="${width / 2}" y="90" text-anchor="middle" fill="#F8FAFC" font-size="52" font-weight="900" font-family="Inter, Arial, sans-serif">RANKING</text>
+      <text x="${width / 2}" y="140" text-anchor="middle" fill="#10B981" font-size="30" font-weight="700" font-family="Inter, Arial, sans-serif">PELADA BALANCEADA</text>
+      <text x="${width / 2}" y="185" text-anchor="middle" fill="#64748B" font-size="22" font-weight="600" font-family="Inter, Arial, sans-serif">${escapeSvgText(date)} • Pontos Corridos</text>
+      <line x1="40" y1="${headerH + colHeaderH}" x2="${width - 40}" y2="${headerH + colHeaderH}" stroke="rgba(255,255,255,0.08)" stroke-width="1" />
+      ${headerRow}
+      ${rows}
+      <line x1="40" y1="${height - footerH}" x2="${width - 40}" y2="${height - footerH}" stroke="rgba(255,255,255,0.06)" stroke-width="1" />
+      <text x="${width / 2}" y="${height - footerH + 46}" text-anchor="middle" fill="#334155" font-size="20" font-weight="700" font-family="Inter, Arial, sans-serif">Pelada Balanceada • Pontos corridos (V=3pts E=1pt D=0pts)</text>
+    </svg>
+  `;
+};
+
+type WidgetData = { label: string; names: string[]; value: number; suffix: string; accent: string };
+
+const createWidgetsShareCardSvg = (widgets: WidgetData[], date: string) => {
+  const width = 1200;
+  const cols = 2;
+  const cardW = 520;
+  const cardH = 200;
+  const gapX = 80;
+  const gapY = 40;
+  const rows = Math.ceil(widgets.length / cols);
+  const headerH = 200;
+  const footerH = 80;
+  const height = headerH + rows * cardH + (rows - 1) * gapY + 60 + footerH;
+
+  const cards = widgets.map((w, i) => {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const x = 80 + col * (cardW + gapX);
+    const y = headerH + row * (cardH + gapY);
+
+    const nameLines = w.names.slice(0, 3).map((name, ni) =>
+      `<text x="${x + 32}" y="${y + 88 + ni * 38}" fill="#F8FAFC" font-size="${w.names.length > 1 ? 26 : 32}" font-weight="900" font-family="Inter, Arial, sans-serif">${escapeSvgText(name.length > 20 ? name.substring(0, 19) + '…' : name)}</text>`
+    ).join('');
+
+    const extraCount = w.names.length > 3 ? w.names.length - 3 : 0;
+
+    return `
+      <rect x="${x}" y="${y}" width="${cardW}" height="${cardH}" rx="28" fill="rgba(15,23,42,0.72)" stroke="${w.accent}" stroke-width="1.5" stroke-opacity="0.4" />
+      <text x="${x + 32}" y="${y + 44}" fill="${w.accent}" font-size="20" font-weight="900" font-family="Inter, Arial, sans-serif" letter-spacing="2">${escapeSvgText(w.label.toUpperCase())}</text>
+      ${nameLines}
+      ${extraCount > 0 ? `<text x="${x + 32}" y="${y + 88 + 3 * 38}" fill="#64748B" font-size="22" font-weight="700" font-family="Inter, Arial, sans-serif">+${extraCount} empatados</text>` : ''}
+      <text x="${x + cardW - 32}" y="${y + cardH - 28}" text-anchor="end" fill="${w.accent}" font-size="26" font-weight="900" font-family="Inter, Arial, sans-serif" opacity="0.7">${w.value} ${escapeSvgText(w.suffix)}</text>
+    `;
+  }).join('');
+
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+      <defs>
+        <linearGradient id="bg" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#14532D" />
+          <stop offset="60%" stop-color="#0F172A" />
+          <stop offset="100%" stop-color="#020617" />
+        </linearGradient>
+      </defs>
+      <rect width="${width}" height="${height}" fill="url(#bg)" />
+      <text x="${width / 2}" y="86" text-anchor="middle" fill="#F8FAFC" font-size="52" font-weight="900" font-family="Inter, Arial, sans-serif">DESTAQUES</text>
+      <text x="${width / 2}" y="136" text-anchor="middle" fill="#10B981" font-size="30" font-weight="700" font-family="Inter, Arial, sans-serif">PELADA BALANCEADA</text>
+      <text x="${width / 2}" y="178" text-anchor="middle" fill="#64748B" font-size="22" font-weight="600" font-family="Inter, Arial, sans-serif">${escapeSvgText(date)}</text>
+      ${cards}
+      <text x="${width / 2}" y="${height - 24}" text-anchor="middle" fill="#1E293B" font-size="20" font-weight="700" font-family="Inter, Arial, sans-serif">Pelada Balanceada</text>
+    </svg>
+  `;
+};
+
 const distributeLineSlots = (count: number, min: number, max: number) => {
   if (count <= 1) return [50];
   return Array.from({ length: count }, (_, idx) => min + ((max - min) * idx) / (count - 1));
 };
 
 const getLineConfig = (position: Position, count: number, isMobileViewport = false) => {
-  const slotLimit = position === 'Atacante' ? 3 : position === 'Goleiro' ? 1 : 4;
+  const slotLimit = position === 'Goleiro' ? 1 : 4;
   const padding = isMobileViewport
     ? position === 'Atacante'
+      ? 10
+      : position === 'Zagueiro'
+        ? 14
+        : 10
+    : position === 'Atacante'
       ? 14
       : position === 'Zagueiro'
-        ? 16
-        : 12
-    : position === 'Atacante'
-      ? 18
-      : position === 'Zagueiro'
-        ? 20
-        : 16;
+        ? 18
+        : 14;
   const totalRows = Math.ceil(count / slotLimit);
 
   return { slotLimit, padding, totalRows };
@@ -467,7 +595,7 @@ export default function App() {
   const allAvailablePlayers = useMemo(() => [...players, ...tempPlayersRegistry], [players, tempPlayersRegistry]);
 
   const playerWinRanking = useMemo<PlayerWinStats[]>(() => {
-    const statsMap = new Map<string, Omit<PlayerWinStats, 'winRate'>>();
+    const statsMap = new Map<string, Omit<PlayerWinStats, 'winRate' | 'points' | 'goalDiff'>>();
 
     const ensurePlayerStats = (player: Player) => {
       if (!statsMap.has(player.id)) {
@@ -520,12 +648,15 @@ export default function App() {
     return [...statsMap.values()]
       .map((stats) => ({
         ...stats,
-        winRate: stats.played > 0 ? Math.round((stats.wins / stats.played) * 100) : 0,
+        points: stats.wins * 3 + stats.draws,
+        goalDiff: stats.goalsFor - stats.goalsAgainst,
+        winRate: stats.played > 0 ? Math.round(((stats.wins * 3 + stats.draws) / (stats.played * 3)) * 100) : 0,
       }))
       .sort((left, right) => {
+        if (right.points !== left.points) return right.points - left.points;
+        if (right.goalDiff !== left.goalDiff) return right.goalDiff - left.goalDiff;
+        if (right.goalsFor !== left.goalsFor) return right.goalsFor - left.goalsFor;
         if (right.wins !== left.wins) return right.wins - left.wins;
-        if (right.winRate !== left.winRate) return right.winRate - left.winRate;
-        if (right.played !== left.played) return right.played - left.played;
         return left.name.localeCompare(right.name, 'pt-BR');
       });
   }, [history]);
@@ -856,6 +987,105 @@ export default function App() {
     }
   };
 
+  const handleShareRanking = async () => {
+    if (playerWinRanking.length === 0) return;
+    try {
+      setIsExportingImage(true);
+      const today = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const svgMarkup = createRankingShareCardSvg(playerWinRanking, today);
+      const svgBlob = new Blob([svgMarkup], { type: 'image/svg+xml;charset=utf-8' });
+      const svgUrl = URL.createObjectURL(svgBlob);
+
+      try {
+        const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => reject(new Error('Falha ao montar imagem do ranking.'));
+          img.src = svgUrl;
+        });
+
+        const canvas = document.createElement('canvas');
+        const svgHeight = 220 + 60 + playerWinRanking.length * 80 + 80 + 40;
+        canvas.width = 1200;
+        canvas.height = svgHeight;
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('Canvas não disponível.');
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+        const pngBlob = await new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob((blob) => {
+            if (!blob) { reject(new Error('Falha ao gerar PNG.')); return; }
+            resolve(blob);
+          }, 'image/png');
+        });
+
+        const shared = await shareBlobFile(pngBlob, 'ranking-pelada.png', 'Ranking da Pelada', 'Confere o ranking completo!');
+        setShareFeedback(shared ? 'Ranking pronto para partilha.' : 'Partilha direta não disponível. Imagem do ranking guardada.');
+      } finally {
+        URL.revokeObjectURL(svgUrl);
+      }
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') {
+        setShareFeedback('Partilha cancelada.');
+      } else {
+        console.error(error);
+        setShareFeedback('Não consegui preparar a imagem do ranking.');
+      }
+    } finally {
+      setIsExportingImage(false);
+    }
+  };
+
+  const handleShareWidgets = async (widgets: WidgetData[]) => {
+    if (widgets.length === 0) return;
+    try {
+      setIsExportingImage(true);
+      const today = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const svgMarkup = createWidgetsShareCardSvg(widgets, today);
+      const svgBlob = new Blob([svgMarkup], { type: 'image/svg+xml;charset=utf-8' });
+      const svgUrl = URL.createObjectURL(svgBlob);
+
+      try {
+        const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => reject(new Error('Falha ao montar imagem dos destaques.'));
+          img.src = svgUrl;
+        });
+
+        const rows = Math.ceil(widgets.length / 2);
+        const svgHeight = 200 + rows * 200 + (rows - 1) * 40 + 60 + 80;
+        const canvas = document.createElement('canvas');
+        canvas.width = 1200;
+        canvas.height = svgHeight;
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('Canvas não disponível.');
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+        const pngBlob = await new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob((blob) => {
+            if (!blob) { reject(new Error('Falha ao gerar PNG.')); return; }
+            resolve(blob);
+          }, 'image/png');
+        });
+
+        const shared = await shareBlobFile(pngBlob, 'destaques-pelada.png', 'Destaques da Pelada', 'Confere os destaques!');
+        setShareFeedback(shared ? 'Destaques prontos para partilha.' : 'Partilha direta não disponível. Imagem dos destaques guardada.');
+      } finally {
+        URL.revokeObjectURL(svgUrl);
+      }
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') {
+        setShareFeedback('Partilha cancelada.');
+      } else {
+        console.error(error);
+        setShareFeedback('Não consegui preparar a imagem dos destaques.');
+      }
+    } finally {
+      setIsExportingImage(false);
+    }
+  };
+
   const [drawViewMode, setDrawViewMode] = useState<'field' | 'list'>('field');
 
   const getPositionOnField = (index: number, total: number, team?: 'A' | 'B', player?: Player) => {
@@ -885,7 +1115,7 @@ export default function App() {
     const leftSlots = distributeLineSlots(itemsInRow, padding, 100 - padding);
     const fieldLineTops = isMobileViewport ? FIELD_LINE_TOPS_MOBILE : FIELD_LINE_TOPS;
     const baseTop = fieldLineTops[team ?? 'selection'][player.position];
-    const verticalOffset = totalRows > 1 ? (rowIndex - (totalRows - 1) / 2) * (isMobileViewport ? 6.5 : 4.5) : 0;
+    const verticalOffset = totalRows > 1 ? (rowIndex - (totalRows - 1) / 2) * (isMobileViewport ? 10 : 6) : 0;
 
     return {
       top: `${baseTop + verticalOffset}%`,
@@ -896,6 +1126,7 @@ export default function App() {
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
   const [editScoreA, setEditScoreA] = useState('');
   const [editScoreB, setEditScoreB] = useState('');
+  const [editDate, setEditDate] = useState('');
 
   const saveToHistory = async () => {
     if (!drawResult || !session) return;
@@ -934,14 +1165,23 @@ export default function App() {
     const sB = parseInt(editScoreB);
     if (isNaN(sA) || isNaN(sB)) return;
 
-    await supabase.from('game_history').update({ score_a: sA, score_b: sB }).eq('id', id);
+    const updates: Record<string, unknown> = { score_a: sA, score_b: sB };
+    let formattedDate: string | undefined;
+    if (editDate) {
+      const [y, m, d] = editDate.split('-');
+      formattedDate = `${d}/${m}/${y}`;
+      updates.date = formattedDate;
+    }
+
+    await supabase.from('game_history').update(updates).eq('id', id);
 
     setHistory(prev => prev.map(game =>
-      game.id === id ? { ...game, scoreA: sA, scoreB: sB } : game
+      game.id === id ? { ...game, scoreA: sA, scoreB: sB, ...(formattedDate ? { date: formattedDate } : {}) } : game
     ));
     setEditingHistoryId(null);
     setEditScoreA('');
     setEditScoreB('');
+    setEditDate('');
   };
 
   const removeGame = async (id: string) => {
@@ -1922,7 +2162,7 @@ export default function App() {
                                {editingHistoryId === game.id ? (
                                  <div className="space-y-3">
                                     <div className="flex items-center gap-2">
-                                       <input 
+                                       <input
                                           type="number"
                                          className="app-input-compact text-primary-emerald"
                                           placeholder="TM A"
@@ -1930,7 +2170,7 @@ export default function App() {
                                           onChange={e => setEditScoreA(e.target.value)}
                                        />
                                        <div className="text-white opacity-20 font-black">X</div>
-                                       <input 
+                                       <input
                                           type="number"
                                           className="app-input-compact text-blue-500"
                                           placeholder="TM B"
@@ -1938,9 +2178,16 @@ export default function App() {
                                           onChange={e => setEditScoreB(e.target.value)}
                                        />
                                     </div>
+                                    <input
+                                      type="date"
+                                      className="app-input-compact w-full text-slate-text"
+                                      value={editDate}
+                                      onChange={e => setEditDate(e.target.value)}
+                                      title="Data da partida (opcional)"
+                                    />
                                     <div className="flex gap-2">
                                        <button onClick={() => updateGameScore(game.id)} className="flex-1 ios-btn-primary h-10 text-[10px]">FINALIZAR</button>
-                                       <button onClick={() => setEditingHistoryId(null)} className="px-4 bg-white/5 border border-white/10 rounded-xl text-slate-muted text-[10px] font-black uppercase">Sair</button>
+                                       <button onClick={() => { setEditingHistoryId(null); setEditDate(''); }} className="px-4 bg-white/5 border border-white/10 rounded-xl text-slate-muted text-[10px] font-black uppercase">Sair</button>
                                     </div>
                                  </div>
                                ) : (
@@ -2056,7 +2303,7 @@ export default function App() {
                                  {editingHistoryId === latestCompletedGame.id ? (
                                    <div className="space-y-3">
                                       <div className="flex items-center gap-2">
-                                         <input 
+                                         <input
                                             type="number"
                                             className="app-input-compact text-primary-emerald"
                                             placeholder="TM A"
@@ -2064,7 +2311,7 @@ export default function App() {
                                             onChange={e => setEditScoreA(e.target.value)}
                                          />
                                          <div className="text-white opacity-20 font-black">X</div>
-                                         <input 
+                                         <input
                                             type="number"
                                             className="app-input-compact text-blue-500"
                                             placeholder="TM B"
@@ -2072,9 +2319,16 @@ export default function App() {
                                             onChange={e => setEditScoreB(e.target.value)}
                                          />
                                       </div>
+                                      <input
+                                        type="date"
+                                        className="app-input-compact w-full text-slate-text"
+                                        value={editDate}
+                                        onChange={e => setEditDate(e.target.value)}
+                                        title="Data da partida (opcional)"
+                                      />
                                       <div className="flex gap-2">
                                          <button onClick={() => updateGameScore(latestCompletedGame.id)} className="flex-1 ios-btn-primary h-10 text-[10px]">ATUALIZAR</button>
-                                         <button onClick={() => setEditingHistoryId(null)} className="px-4 bg-white/5 border border-white/10 rounded-xl text-slate-muted text-[10px] font-black uppercase">Sair</button>
+                                         <button onClick={() => { setEditingHistoryId(null); setEditDate(''); }} className="px-4 bg-white/5 border border-white/10 rounded-xl text-slate-muted text-[10px] font-black uppercase">Sair</button>
                                       </div>
                                    </div>
                                  ) : (
@@ -2187,6 +2441,7 @@ export default function App() {
                               <div className="game-card overflow-hidden border border-slate-border">
                                 {(() => {
                                   const selectedGame = archivedCompletedGames.find((game) => game.id === expandedHistoryId)!;
+                                  const isEditingThis = editingHistoryId === selectedGame.id;
 
                                   return (
                                     <>
@@ -2203,8 +2458,59 @@ export default function App() {
                                           >
                                             <Share2 size={12} />
                                           </button>
+                                          <button
+                                            onClick={() => {
+                                              setEditingHistoryId(isEditingThis ? null : selectedGame.id);
+                                              setEditScoreA(String(selectedGame.scoreA ?? ''));
+                                              setEditScoreB(String(selectedGame.scoreB ?? ''));
+                                              setEditDate('');
+                                            }}
+                                            className={cn("rounded-lg p-1.5 transition-colors", isEditingThis ? "bg-primary-emerald/20 text-primary-emerald" : "bg-white/5 text-slate-muted hover:text-primary-emerald")}
+                                          >
+                                            <Edit2 size={12} />
+                                          </button>
+                                          <button
+                                            onClick={() => removeGame(selectedGame.id)}
+                                            className="rounded-lg bg-red-500/10 p-1.5 text-red-500 hover:bg-red-500/20"
+                                          >
+                                            <Trash2 size={12} />
+                                          </button>
                                         </div>
                                       </div>
+
+                                      {isEditingThis && (
+                                        <div className="space-y-3 border-b border-white/5 p-3">
+                                          <div className="flex items-center gap-2">
+                                            <input
+                                              type="number"
+                                              className="app-input-compact text-primary-emerald"
+                                              placeholder="TM A"
+                                              value={editScoreA}
+                                              onChange={e => setEditScoreA(e.target.value)}
+                                            />
+                                            <div className="text-white opacity-20 font-black">X</div>
+                                            <input
+                                              type="number"
+                                              className="app-input-compact text-blue-500"
+                                              placeholder="TM B"
+                                              value={editScoreB}
+                                              onChange={e => setEditScoreB(e.target.value)}
+                                            />
+                                          </div>
+                                          <input
+                                            type="date"
+                                            className="app-input-compact w-full text-slate-text"
+                                            value={editDate}
+                                            onChange={e => setEditDate(e.target.value)}
+                                            title="Data da partida (opcional)"
+                                          />
+                                          <div className="flex gap-2">
+                                            <button onClick={() => updateGameScore(selectedGame.id)} className="flex-1 ios-btn-primary h-10 text-[10px]">SALVAR</button>
+                                            <button onClick={() => { setEditingHistoryId(null); setEditDate(''); }} className="px-4 bg-white/5 border border-white/10 rounded-xl text-slate-muted text-[10px] font-black uppercase">Sair</button>
+                                          </div>
+                                        </div>
+                                      )}
+
                                       <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2">
                                         <div className="space-y-2">
                                           <div className="text-[8px] font-black text-primary-emerald uppercase tracking-widest flex items-center gap-1">
@@ -2243,39 +2549,152 @@ export default function App() {
                       </div>
                     )}
 
-                    {playerWinRanking.length > 0 && completedHistory.length > 0 && (
-                      <div className="game-card border-primary-emerald/20 p-4">
-                        <div className="mb-4 flex items-center justify-between">
-                          <div>
-                            <div className="text-[10px] font-black uppercase tracking-widest text-primary-emerald">Ranking de vitórias</div>
-                            <div className="mt-1 text-[8px] font-black uppercase tracking-widest text-slate-muted">Resumo final após os placares definidos</div>
-                          </div>
-                          <Trophy size={18} className="text-primary-emerald" />
-                        </div>
-                        <div className="space-y-2">
-                          {playerWinRanking.map((player, index) => (
-                            <div key={player.id} className="flex items-center gap-3 rounded-2xl border border-slate-border bg-slate-panel/70 px-3 py-2.5">
-                              <div className={cn(
-                                "flex h-8 w-8 items-center justify-center rounded-xl text-sm font-black",
-                                index === 0 ? "bg-amber-500/15 text-amber-500" : index === 1 ? "bg-slate-300/10 text-slate-text" : index === 2 ? "bg-orange-500/15 text-orange-400" : "bg-white/5 text-slate-muted"
-                              )}>
-                                {index + 1}
+                    {playerWinRanking.length > 0 && completedHistory.length > 0 && (() => {
+                      const tiedTop = <T extends PlayerWinStats>(list: T[], val: (p: T) => number) => {
+                        if (!list.length) return { names: [] as string[], value: 0 };
+                        const best = val(list[0]);
+                        return { names: list.filter(p => val(p) === best).map(p => p.name), value: best };
+                      };
+
+                      const byPlayedDesc = [...playerWinRanking].sort((a, b) => b.played - a.played);
+                      const byWinsDesc   = [...playerWinRanking].sort((a, b) => b.wins - a.wins);
+                      const byGFDesc     = [...playerWinRanking].sort((a, b) => b.goalsFor - a.goalsFor);
+                      const byGFAsc      = [...playerWinRanking].filter(p => p.played > 0).sort((a, b) => a.goalsFor - b.goalsFor);
+                      const byLossDesc   = [...playerWinRanking].sort((a, b) => b.losses - a.losses);
+                      const byPlayedAsc  = [...playerWinRanking].filter(p => p.played > 5).sort((a, b) => a.played - b.played);
+
+                      const mostPlayed  = tiedTop(byPlayedDesc, p => p.played);
+                      const mostWins    = tiedTop(byWinsDesc,   p => p.wins);
+                      const mostGoals   = tiedTop(byGFDesc,     p => p.goalsFor);
+                      const leastGoals  = tiedTop(byGFAsc,      p => p.goalsFor);
+                      const mostLosses  = tiedTop(byLossDesc,   p => p.losses);
+                      const leastPlayed = tiedTop(byPlayedAsc,  p => p.played);
+
+                      return (
+                        <>
+                          {/* Tabela de pontos corridos */}
+                          <div className="game-card border-primary-emerald/20 overflow-hidden">
+                            <div className="flex items-center justify-between border-b border-white/5 p-4">
+                              <div>
+                                <div className="text-[10px] font-black uppercase tracking-widest text-primary-emerald">Ranking • Pontos Corridos</div>
+                                <div className="mt-0.5 text-[8px] font-black uppercase tracking-widest text-slate-muted">V=3pts • E=1pt • D=0pts</div>
                               </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="truncate text-sm font-black text-slate-text">{player.name}</div>
-                                <div className="text-[9px] font-bold uppercase tracking-wide text-slate-muted">
-                                  {player.wins} vitórias • {player.draws} empates • {player.losses} derrotas
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-sm font-black text-primary-emerald">{player.winRate}%</div>
-                                <div className="text-[9px] font-bold uppercase tracking-wide text-slate-muted">{player.played} jogos</div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={handleShareRanking}
+                                  disabled={isExportingImage}
+                                  className="rounded-lg bg-white/5 p-1.5 text-slate-muted hover:text-primary-emerald transition-colors"
+                                  title="Partilhar ranking"
+                                >
+                                  <Share2 size={14} />
+                                </button>
+                                <Trophy size={16} className="text-primary-emerald" />
                               </div>
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+
+                            {/* Cabeçalho da tabela */}
+                            <div className="grid border-b border-white/5 bg-black/20 px-2 py-1.5" style={{ gridTemplateColumns: '28px 1fr 28px 28px 28px 28px 28px 28px 36px' }}>
+                              {['#','NOME','J','V','E','D','GF','GC','APR%'].map((h, i) => (
+                                <div key={h} className={cn("text-[8px] font-black uppercase tracking-wider text-slate-muted", i === 1 ? 'text-left pl-1' : 'text-center')}>
+                                  {h}
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Linhas dos jogadores */}
+                            <div className="divide-y divide-white/[0.04]">
+                              {playerWinRanking.map((player, index) => (
+                                <div
+                                  key={player.id}
+                                  className={cn(
+                                    "grid items-center px-2 py-2.5",
+                                    index === 0 ? "bg-amber-500/5 border-l-2 border-l-amber-500" :
+                                    index === 1 ? "bg-slate-300/[0.03] border-l-2 border-l-slate-400" :
+                                    index === 2 ? "bg-orange-500/5 border-l-2 border-l-orange-500" : ""
+                                  )}
+                                  style={{ gridTemplateColumns: '28px 1fr 28px 28px 28px 28px 28px 28px 36px' }}
+                                >
+                                  <div className={cn(
+                                    "flex h-5 w-5 items-center justify-center rounded-md text-[9px] font-black",
+                                    index === 0 ? "bg-amber-500/20 text-amber-400" :
+                                    index === 1 ? "bg-slate-300/10 text-slate-300" :
+                                    index === 2 ? "bg-orange-500/20 text-orange-400" : "text-slate-muted"
+                                  )}>
+                                    {index + 1}
+                                  </div>
+                                  <div className="min-w-0 pl-1">
+                                    <div className="truncate text-[11px] font-black text-slate-text">{player.name}</div>
+                                  </div>
+                                  <div className="text-center text-[10px] font-bold text-slate-muted">{player.played}</div>
+                                  <div className="text-center text-[10px] font-black text-primary-emerald">{player.wins}</div>
+                                  <div className="text-center text-[10px] font-bold text-slate-muted">{player.draws}</div>
+                                  <div className="text-center text-[10px] font-bold text-red-400">{player.losses}</div>
+                                  <div className="text-center text-[10px] font-bold text-blue-400">{player.goalsFor}</div>
+                                  <div className="text-center text-[10px] font-bold text-slate-muted">{player.goalsAgainst}</div>
+                                  <div className={cn(
+                                    "text-center text-[10px] font-black",
+                                    player.winRate >= 60 ? "text-primary-emerald" : player.winRate >= 40 ? "text-amber-400" : "text-red-400"
+                                  )}>
+                                    {player.winRate}%
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Widgets de destaque */}
+                          {(() => {
+                            const widgetDefs = [
+                              { icon: <LayoutList size={14} />, label: 'Mais jogos',      stat: mostPlayed,  suffix: 'jogos',       color: 'text-blue-400',        border: 'border-blue-500/20',        accent: '#60A5FA' },
+                              { icon: <Trophy size={14} />,     label: 'Mais vitórias',   stat: mostWins,    suffix: 'vitórias',    color: 'text-amber-400',       border: 'border-amber-500/20',       accent: '#F59E0B' },
+                              { icon: <Sword size={14} />,      label: 'Time com + gols', stat: mostGoals,   suffix: 'gols feitos', color: 'text-primary-emerald', border: 'border-primary-emerald/20', accent: '#10B981' },
+                              { icon: <Shield size={14} />,     label: 'Time com - gols', stat: leastGoals,  suffix: 'gols feitos', color: 'text-slate-400',       border: 'border-slate-500/20',       accent: '#94A3B8' },
+                              { icon: <Target size={14} />,     label: 'Mais derrotas',   stat: mostLosses,  suffix: 'derrotas',    color: 'text-red-400',         border: 'border-red-500/20',         accent: '#F87171' },
+                              { icon: <Users size={14} />,      label: 'Menos jogos (+5)',stat: leastPlayed, suffix: 'jogos',       color: 'text-purple-400',      border: 'border-purple-500/20',      accent: '#C084FC' },
+                            ].filter(w => w.stat.names.length > 0);
+
+                            const shareableWidgets: WidgetData[] = widgetDefs.map(w => ({
+                              label: w.label,
+                              names: w.stat.names,
+                              value: w.stat.value,
+                              suffix: w.suffix,
+                              accent: w.accent,
+                            }));
+
+                            return (
+                              <div className="game-card border-slate-border/30 overflow-hidden">
+                                <div className="flex items-center justify-between border-b border-white/5 px-4 py-3">
+                                  <div className="text-[10px] font-black uppercase tracking-widest text-slate-text">Destaques</div>
+                                  <button
+                                    onClick={() => handleShareWidgets(shareableWidgets)}
+                                    disabled={isExportingImage}
+                                    className="rounded-lg bg-white/5 p-1.5 text-slate-muted hover:text-primary-emerald transition-colors"
+                                    title="Partilhar destaques"
+                                  >
+                                    <Share2 size={14} />
+                                  </button>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 p-3">
+                                  {widgetDefs.map((w, i) => (
+                                    <div key={i} className={cn("rounded-2xl border bg-slate-panel/60 p-3 flex flex-col gap-1.5", w.border)}>
+                                      <div className={cn("flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest leading-tight", w.color)}>
+                                        {w.icon}<span>{w.label}</span>
+                                      </div>
+                                      <div className="space-y-0.5">
+                                        {w.stat.names.map((name, ni) => (
+                                          <div key={ni} className="truncate text-[11px] font-black text-slate-text">{name}</div>
+                                        ))}
+                                      </div>
+                                      <div className="text-[9px] font-bold text-slate-muted">{w.stat.value} {w.suffix}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </>
+                      );
+                    })()}
                   </>
                 )}
               </div>
