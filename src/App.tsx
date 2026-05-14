@@ -676,7 +676,7 @@ export default function App() {
   );
 
   const latestCompletedGame = completedHistory[0];
-  const archivedCompletedGames = completedHistory.slice(1);
+  const archivedCompletedGames = completedHistory.slice(1, 11);
 
   // Form State
   const [isEditing, setIsEditing] = useState<string | null>(null);
@@ -1041,82 +1041,145 @@ export default function App() {
   };
 
   const createFieldShareCardSvg = (match: ShareableMatch) => {
-    const W = 1000;
-    const H = 1500;
-    const fieldX = 30;
-    const fieldY = 100;
-    const fieldW = W - 60;
-    const fieldH = H - 220;
+    // Aspect ratio 4:7 igual ao campo do app (aspect-[4/7])
+    const W = 880;
+    const HEADER = 80;
+    const FOOTER = 100;
+    const fieldW = W - 40;
+    const fieldH = Math.round(fieldW * 7 / 4);
+    const H = HEADER + fieldH + FOOTER;
+    const fieldX = 20;
+    const fieldY = HEADER;
 
-    const px = (left: number) => fieldX + (left / 100) * fieldW;
-    const py = (top: number)  => fieldY + (top  / 100) * fieldH;
+    const svgX = (left: number) => fieldX + (left / 100) * fieldW;
+    const svgY = (top: number)  => fieldY + (top  / 100) * fieldH;
+
+    // Replica exatamente getPositionOnField (isMobileViewport=false, ou seja, padding desktop)
+    const svgDistributeSlots = (count: number, min: number, max: number) =>
+      count <= 1 ? [50] : Array.from({ length: count }, (_, i) => min + ((max - min) * i) / (count - 1));
+
+    const svgGetLineConfig = (position: Position, count: number) => {
+      const slotLimit = position === 'Goleiro' ? 1 : 4;
+      const padding = position === 'Zagueiro' ? 18 : 14;
+      const totalRows = Math.ceil(count / slotLimit);
+      return { slotLimit, padding, totalRows };
+    };
+
+    // Escala da camisa: o path usa espaço 0-100, centro do corpo ≈ (50, 57.5)
+    const JScale = 0.78;
+    const jCx = 50 * JScale;   // offset horizontal para centrar
+    const jCy = 57.5 * JScale; // offset vertical para centrar no y do jogador
+    const labelOffY = (95 - 57.5) * JScale + 5; // distância do centro até abaixo da camisa
+    const labelW = 96;
 
     const renderPlayer = (player: Player, team: 'A' | 'B') => {
-      const playersInLine = (team === 'A' ? match.teamA : match.teamB).players
-        .filter(p => p.position === player.position || p.secondaryPosition === player.position);
-      const allInLine = (team === 'A' ? match.teamA : match.teamB).players.filter(p => p.position === player.position);
-      const idx = allInLine.findIndex(p => p.id === player.id);
-      const slotLimit = player.position === 'Goleiro' ? 1 : 4;
-      const rowIdx = Math.floor(idx / slotLimit);
-      const colIdx = idx % slotLimit;
-      const itemsInRow = Math.min(slotLimit, allInLine.length - rowIdx * slotLimit);
-      const totalRows = Math.ceil(allInLine.length / slotLimit);
-      const padding = 14;
-      const slots = Array.from({ length: itemsInRow }, (_, i) => padding + ((100 - padding * 2) * i) / (itemsInRow - 1 || 1));
-      const vertOff = totalRows > 1 ? (rowIdx - (totalRows - 1) / 2) * 7 : 0;
+      const teamPlayers = team === 'A' ? match.teamA.players : match.teamB.players;
+      const playersInSameLine = teamPlayers.filter(p => p.position === player.position);
+      const playerIdx = Math.max(playersInSameLine.findIndex(p => p.id === player.id), 0);
+      const { slotLimit, padding, totalRows } = svgGetLineConfig(player.position, playersInSameLine.length);
+      const rowIndex = Math.floor(playerIdx / slotLimit);
+      const colIndex = playerIdx % slotLimit;
+      const itemsInRow = Math.min(slotLimit, playersInSameLine.length - rowIndex * slotLimit);
+      const leftSlots = svgDistributeSlots(itemsInRow, padding, 100 - padding);
       const baseTop = FIELD_LINE_TOPS[team][player.position];
-      const left = slots[colIdx] ?? 50;
-      const top = baseTop + vertOff;
-      const x = px(left);
-      const y = py(top);
-      const color = team === 'A'
-        ? (player.position === 'Goleiro' ? '#F59E0B' : '#10B981')
-        : (player.position === 'Goleiro' ? '#F59E0B' : '#2563EB');
+      const verticalOffset = totalRows > 1 ? (rowIndex - (totalRows - 1) / 2) * 9 : 0;
+
+      const x = svgX(leftSlots[colIndex] ?? 50);
+      const y = svgY(baseTop + verticalOffset);
+
+      const gradId = team === 'A'
+        ? (player.position === 'Goleiro' ? 'jgrad_amber' : 'jgrad_green')
+        : (player.position === 'Goleiro' ? 'jgrad_amber' : 'jgrad_blue');
+
       const initials = escapeSvgText(player.name.split(' ').map(n => n[0]).filter((_, i) => i < 2).join('').toUpperCase());
-      const name = escapeSvgText(player.name.length > 12 ? player.name.substring(0, 11) + '…' : player.name);
+      const displayName = escapeSvgText(player.name.length > 11 ? player.name.substring(0, 10) + '…' : player.name);
+
+      const tx = (x - jCx).toFixed(1);
+      const ty = (y - jCy).toFixed(1);
+      const lx = (x - labelW / 2).toFixed(1);
+      const ly = (y + labelOffY).toFixed(1);
+
       return `
-        <circle cx="${x}" cy="${y}" r="34" fill="${color}" opacity="0.92" />
-        <circle cx="${x}" cy="${y}" r="34" fill="none" stroke="white" stroke-width="2.5" opacity="0.5" />
-        <text x="${x}" y="${y + 7}" text-anchor="middle" fill="white" font-size="22" font-weight="900" font-family="Inter, Arial, sans-serif">${initials}</text>
-        <rect x="${x - 48}" y="${y + 38}" width="96" height="24" rx="8" fill="rgba(0,0,0,0.75)" />
-        <text x="${x}" y="${y + 55}" text-anchor="middle" fill="white" font-size="16" font-weight="800" font-family="Inter, Arial, sans-serif">${name}</text>
+        <g transform="translate(${tx},${ty}) scale(${JScale})">
+          <path d="M20,20 L80,20 L88,45 L72,52 L72,95 L28,95 L28,52 L12,45 Z"
+                fill="black" fill-opacity="0.3" transform="translate(2,2)"/>
+          <path d="M20,20 L80,20 L88,45 L72,52 L72,95 L28,95 L28,52 L12,45 Z"
+                fill="url(#${gradId})" stroke="white" stroke-width="2.5" stroke-linejoin="round"/>
+          <path d="M40,20 Q50,30 60,20" fill="none" stroke="white" stroke-width="2.5"/>
+          <path d="M28,95 L72,95" fill="none" stroke="white" stroke-width="1.5" stroke-opacity="0.5"/>
+          <text x="50" y="56" font-size="18" font-weight="900" fill="white" text-anchor="middle"
+                font-family="Inter,Arial,sans-serif">${initials}</text>
+        </g>
+        <rect x="${lx}" y="${ly}" width="${labelW}" height="22" rx="7" fill="rgba(0,0,0,0.82)"/>
+        <text x="${x.toFixed(1)}" y="${(y + labelOffY + 15).toFixed(1)}" text-anchor="middle" fill="white"
+              font-size="14" font-weight="800" font-family="Inter,Arial,sans-serif">${displayName}</text>
       `;
     };
 
     const teamAPlayers = match.teamA.players.map(p => renderPlayer(p, 'A')).join('');
     const teamBPlayers = match.teamB.players.map(p => renderPlayer(p, 'B')).join('');
 
-    const scoreBar = match.scoreA !== undefined && match.scoreB !== undefined
-      ? `<text x="${W / 2}" y="${H - 48}" text-anchor="middle" fill="#F8FAFC" font-size="52" font-weight="900" font-family="Inter, Arial, sans-serif">${match.scoreA} × ${match.scoreB}</text>`
-      : `<text x="${W / 2}" y="${H - 48}" text-anchor="middle" fill="#64748B" font-size="24" font-weight="700" font-family="Inter, Arial, sans-serif">Pelada Balanceada</text>`;
+    // Field markings — proporções reais de um campo de futebol (68m × 105m)
+    const pa_w = fieldW * 0.593;  // área penalty: 40.32m / 68m
+    const pa_h = fieldH * 0.157;  // área penalty: 16.5m / 105m
+    const pa_x = fieldX + (fieldW - pa_w) / 2;
+    const ga_w = fieldW * 0.348;  // área de meta: 18.32m / 52.68m ≈ 40% da área penalty
+    const ga_h = fieldH * 0.057;  // 6m / 105m
+    const ga_x = fieldX + (fieldW - ga_w) / 2;
+    const ccR  = Math.round(fieldW * 0.107); // círculo central: 9.15m / 85m ≈ 10.7% do fieldW
+
+    const scoreText = match.scoreA !== undefined && match.scoreB !== undefined
+      ? `<text x="${W/2}" y="${fieldY + fieldH + 62}" text-anchor="middle" fill="#F8FAFC" font-size="44" font-weight="900" font-family="Inter,Arial,sans-serif">${match.scoreA} × ${match.scoreB}</text>`
+      : `<text x="${W/2}" y="${fieldY + fieldH + 62}" text-anchor="middle" fill="#475569" font-size="20" font-weight="700" font-family="Inter,Arial,sans-serif">Pelada Balanceada</text>`;
 
     return `
       <svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-        <rect width="${W}" height="${H}" fill="#0F172A" />
-        <!-- Field -->
-        <rect x="${fieldX}" y="${fieldY}" width="${fieldW}" height="${fieldH}" rx="12" fill="#166534" />
-        <rect x="${fieldX}" y="${fieldY}" width="${fieldW}" height="${fieldH}" rx="12" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="3" />
+        <defs>
+          <linearGradient id="jgrad_green" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#10B981" stop-opacity="1"/>
+            <stop offset="100%" stop-color="#059669" stop-opacity="0.9"/>
+          </linearGradient>
+          <linearGradient id="jgrad_blue" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#3B82F6" stop-opacity="1"/>
+            <stop offset="100%" stop-color="#1D4ED8" stop-opacity="0.9"/>
+          </linearGradient>
+          <linearGradient id="jgrad_amber" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#F59E0B" stop-opacity="1"/>
+            <stop offset="100%" stop-color="#D97706" stop-opacity="0.9"/>
+          </linearGradient>
+        </defs>
+        <rect width="${W}" height="${H}" fill="#0F172A"/>
+        <!-- Header labels -->
+        <rect x="${fieldX}" y="12" width="140" height="32" rx="10" fill="rgba(16,185,129,0.2)"/>
+        <text x="${fieldX + 70}" y="33" text-anchor="middle" fill="#10B981" font-size="17" font-weight="900" font-family="Inter,Arial,sans-serif">TIME VERDE</text>
+        <rect x="${fieldX + fieldW - 140}" y="12" width="140" height="32" rx="10" fill="rgba(37,99,235,0.2)"/>
+        <text x="${fieldX + fieldW - 70}" y="33" text-anchor="middle" fill="#60A5FA" font-size="17" font-weight="900" font-family="Inter,Arial,sans-serif">TIME AZUL</text>
+        <!-- Field background -->
+        <rect x="${fieldX}" y="${fieldY}" width="${fieldW}" height="${fieldH}" rx="10" fill="#166534"/>
+        <!-- Outer border -->
+        <rect x="${fieldX}" y="${fieldY}" width="${fieldW}" height="${fieldH}" rx="10" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2.5"/>
         <!-- Center line -->
-        <line x1="${fieldX}" y1="${fieldY + fieldH / 2}" x2="${fieldX + fieldW}" y2="${fieldY + fieldH / 2}" stroke="rgba(255,255,255,0.25)" stroke-width="2.5" />
+        <line x1="${fieldX}" y1="${fieldY + fieldH/2}" x2="${fieldX + fieldW}" y2="${fieldY + fieldH/2}" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>
         <!-- Center circle -->
-        <circle cx="${W / 2}" cy="${fieldY + fieldH / 2}" r="80" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="2.5" />
-        <circle cx="${W / 2}" cy="${fieldY + fieldH / 2}" r="8" fill="rgba(255,255,255,0.4)" />
-        <!-- Penalty areas -->
-        <rect x="${fieldX + fieldW * 0.2}" y="${fieldY}" width="${fieldW * 0.6}" height="${fieldH * 0.14}" rx="4" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="2" />
-        <rect x="${fieldX + fieldW * 0.2}" y="${fieldY + fieldH * 0.86}" width="${fieldW * 0.6}" height="${fieldH * 0.14}" rx="4" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="2" />
-        <!-- Goal areas -->
-        <rect x="${fieldX + fieldW * 0.35}" y="${fieldY}" width="${fieldW * 0.3}" height="${fieldH * 0.055}" rx="3" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="2" />
-        <rect x="${fieldX + fieldW * 0.35}" y="${fieldY + fieldH * 0.945}" width="${fieldW * 0.3}" height="${fieldH * 0.055}" rx="3" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="2" />
-        <!-- Team labels -->
-        <rect x="${fieldX + 10}" y="${fieldY + 10}" width="160" height="36" rx="10" fill="rgba(16,185,129,0.25)" />
-        <text x="${fieldX + 90}" y="${fieldY + 34}" text-anchor="middle" fill="#10B981" font-size="20" font-weight="900" font-family="Inter, Arial, sans-serif">TIME VERDE</text>
-        <rect x="${fieldX + fieldW - 170}" y="${fieldY + fieldH - 46}" width="160" height="36" rx="10" fill="rgba(37,99,235,0.25)" />
-        <text x="${fieldX + fieldW - 90}" y="${fieldY + fieldH - 22}" text-anchor="middle" fill="#60A5FA" font-size="20" font-weight="900" font-family="Inter, Arial, sans-serif">TIME AZUL</text>
+        <circle cx="${W/2}" cy="${fieldY + fieldH/2}" r="${ccR}" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="2"/>
+        <circle cx="${W/2}" cy="${fieldY + fieldH/2}" r="6" fill="rgba(255,255,255,0.5)"/>
+        <!-- Penalty area top -->
+        <rect x="${pa_x}" y="${fieldY}" width="${pa_w}" height="${pa_h}" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="1.8"/>
+        <!-- Goal area top -->
+        <rect x="${ga_x}" y="${fieldY}" width="${ga_w}" height="${ga_h}" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1.5"/>
+        <!-- Penalty spot top -->
+        <circle cx="${W/2}" cy="${fieldY + fieldH * 0.115}" r="4" fill="rgba(255,255,255,0.35)"/>
+        <!-- Penalty area bottom -->
+        <rect x="${pa_x}" y="${fieldY + fieldH - pa_h}" width="${pa_w}" height="${pa_h}" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="1.8"/>
+        <!-- Goal area bottom -->
+        <rect x="${ga_x}" y="${fieldY + fieldH - ga_h}" width="${ga_w}" height="${ga_h}" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1.5"/>
+        <!-- Penalty spot bottom -->
+        <circle cx="${W/2}" cy="${fieldY + fieldH * 0.885}" r="4" fill="rgba(255,255,255,0.35)"/>
         <!-- Players -->
         ${teamAPlayers}
         ${teamBPlayers}
-        <!-- Score / footer -->
-        ${scoreBar}
+        <!-- Footer -->
+        ${scoreText}
       </svg>
     `;
   };
@@ -1136,12 +1199,15 @@ export default function App() {
           img.onerror = () => reject(new Error('Falha ao montar imagem do campo.'));
           img.src = svgUrl;
         });
+        // dimensões exactas que o SVG declara: W=880, H=80+fieldH+100 onde fieldH=(860*7/4)=1505 → H=1685
+        const svgW = 880;
+        const svgH = 80 + Math.round(860 * 7 / 4) + 100;
         const canvas = document.createElement('canvas');
-        canvas.width = 1000;
-        canvas.height = 1500;
+        canvas.width = svgW;
+        canvas.height = svgH;
         const ctx = canvas.getContext('2d');
         if (!ctx) throw new Error('Canvas não disponível.');
-        ctx.drawImage(image, 0, 0, 1000, 1500);
+        ctx.drawImage(image, 0, 0, svgW, svgH);
         const pngBlob = await new Promise<Blob>((resolve, reject) => {
           canvas.toBlob(blob => { if (!blob) reject(new Error('Falha ao gerar PNG.')); else resolve(blob); }, 'image/png');
         });
@@ -2695,14 +2761,14 @@ export default function App() {
                       const byPlayedDesc = [...playerWinRanking].sort((a, b) => b.played - a.played);
                       const byWinsDesc   = [...playerWinRanking].sort((a, b) => b.wins - a.wins);
                       const byGFDesc     = [...playerWinRanking].sort((a, b) => b.goalsFor - a.goalsFor);
-                      const byGFAsc      = [...playerWinRanking].filter(p => p.played > 0).sort((a, b) => a.goalsFor - b.goalsFor);
+                      const byGADesc     = [...playerWinRanking].filter(p => p.played > 0).sort((a, b) => b.goalsAgainst - a.goalsAgainst);
                       const byLossDesc   = [...playerWinRanking].sort((a, b) => b.losses - a.losses);
                       const byPlayedAsc  = [...playerWinRanking].filter(p => p.played > 5).sort((a, b) => a.played - b.played);
 
                       const mostPlayed  = tiedTop(byPlayedDesc, p => p.played);
                       const mostWins    = tiedTop(byWinsDesc,   p => p.wins);
                       const mostGoals   = tiedTop(byGFDesc,     p => p.goalsFor);
-                      const leastGoals  = tiedTop(byGFAsc,      p => p.goalsFor);
+                      const mostConceded = tiedTop(byGADesc,    p => p.goalsAgainst);
                       const mostLosses  = tiedTop(byLossDesc,   p => p.losses);
                       const leastPlayed = tiedTop(byPlayedAsc,  p => p.played);
 
@@ -2784,7 +2850,7 @@ export default function App() {
                               { icon: <LayoutList size={14} />, label: 'Mais jogos',      stat: mostPlayed,  suffix: 'jogos',       color: 'text-blue-400',        border: 'border-blue-500/20',        accent: '#60A5FA' },
                               { icon: <Trophy size={14} />,     label: 'Mais vitórias',   stat: mostWins,    suffix: 'vitórias',    color: 'text-amber-400',       border: 'border-amber-500/20',       accent: '#F59E0B' },
                               { icon: <Sword size={14} />,      label: 'Time com + gols', stat: mostGoals,   suffix: 'gols feitos', color: 'text-primary-emerald', border: 'border-primary-emerald/20', accent: '#10B981' },
-                              { icon: <Shield size={14} />,     label: 'Time com - gols', stat: leastGoals,  suffix: 'gols feitos', color: 'text-slate-400',       border: 'border-slate-500/20',       accent: '#94A3B8' },
+                              { icon: <Shield size={14} />,     label: 'Time + gols sofridos', stat: mostConceded, suffix: 'gols sofridos', color: 'text-orange-400', border: 'border-orange-500/20', accent: '#FB923C' },
                               { icon: <Target size={14} />,     label: 'Mais derrotas',   stat: mostLosses,  suffix: 'derrotas',    color: 'text-red-400',         border: 'border-red-500/20',         accent: '#F87171' },
                               { icon: <Users size={14} />,      label: 'Menos jogos (+5)',stat: leastPlayed, suffix: 'jogos',       color: 'text-purple-400',      border: 'border-purple-500/20',      accent: '#C084FC' },
                             ].filter(w => w.stat.names.length > 0);
