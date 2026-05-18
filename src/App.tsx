@@ -670,6 +670,11 @@ export default function App() {
     [playerWinRanking]
   );
 
+  const squadRanking = useMemo(
+    () => playerWinRanking.filter(p => players.some(pl => pl.id === p.id)),
+    [playerWinRanking, players]
+  );
+
   const completedHistory = useMemo(
     () => history.filter((game) => game.scoreA !== undefined && game.scoreB !== undefined),
     [history]
@@ -992,11 +997,11 @@ export default function App() {
   };
 
   const handleShareRanking = async () => {
-    if (playerWinRanking.length === 0) return;
+    if (squadRanking.length === 0) return;
     try {
       setIsExportingImage(true);
       const today = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      const svgMarkup = createRankingShareCardSvg(playerWinRanking, today);
+      const svgMarkup = createRankingShareCardSvg(squadRanking, today);
       const svgBlob = new Blob([svgMarkup], { type: 'image/svg+xml;charset=utf-8' });
       const svgUrl = URL.createObjectURL(svgBlob);
 
@@ -1009,7 +1014,7 @@ export default function App() {
         });
 
         const canvas = document.createElement('canvas');
-        const svgHeight = 220 + 60 + playerWinRanking.length * 80 + 80 + 40;
+        const svgHeight = 220 + 60 + squadRanking.length * 80 + 80 + 40;
         canvas.width = 1200;
         canvas.height = svgHeight;
         const context = canvas.getContext('2d');
@@ -2751,128 +2756,219 @@ export default function App() {
                       </div>
                     )}
 
-                    {playerWinRanking.length > 0 && completedHistory.length > 0 && (() => {
+                    {squadRanking.length > 0 && completedHistory.length > 0 && (() => {
                       const tiedTop = <T extends PlayerWinStats>(list: T[], val: (p: T) => number) => {
                         if (!list.length) return { names: [] as string[], value: 0 };
                         const best = val(list[0]);
                         return { names: list.filter(p => val(p) === best).map(p => p.name), value: best };
                       };
 
-                      const byPlayedDesc = [...playerWinRanking].sort((a, b) => b.played - a.played);
-                      const byWinsDesc   = [...playerWinRanking].sort((a, b) => b.wins - a.wins);
-                      const byGFDesc     = [...playerWinRanking].sort((a, b) => b.goalsFor - a.goalsFor);
-                      const byGADesc     = [...playerWinRanking].filter(p => p.played > 0).sort((a, b) => b.goalsAgainst - a.goalsAgainst);
-                      const byLossDesc   = [...playerWinRanking].sort((a, b) => b.losses - a.losses);
-                      const byPlayedAsc  = [...playerWinRanking].filter(p => p.played > 5).sort((a, b) => a.played - b.played);
+                      const byPlayedDesc = [...squadRanking].sort((a, b) => b.played - a.played);
+                      const byWinsDesc   = [...squadRanking].sort((a, b) => b.wins - a.wins);
+                      const byGFDesc     = [...squadRanking].sort((a, b) => b.goalsFor - a.goalsFor);
+                      const byGADesc     = [...squadRanking].filter(p => p.played > 0).sort((a, b) => b.goalsAgainst - a.goalsAgainst);
+                      const byLossDesc   = [...squadRanking].sort((a, b) => b.losses - a.losses);
+                      const byPlayedAsc  = [...squadRanking].filter(p => p.played > 5).sort((a, b) => a.played - b.played);
 
-                      const mostPlayed  = tiedTop(byPlayedDesc, p => p.played);
-                      const mostWins    = tiedTop(byWinsDesc,   p => p.wins);
-                      const mostGoals   = tiedTop(byGFDesc,     p => p.goalsFor);
-                      const mostConceded = tiedTop(byGADesc,    p => p.goalsAgainst);
-                      const mostLosses  = tiedTop(byLossDesc,   p => p.losses);
-                      const leastPlayed = tiedTop(byPlayedAsc,  p => p.played);
+                      const mostPlayed   = tiedTop(byPlayedDesc, p => p.played);
+                      const mostWins     = tiedTop(byWinsDesc,   p => p.wins);
+                      const mostGoals    = tiedTop(byGFDesc,     p => p.goalsFor);
+                      const mostConceded = tiedTop(byGADesc,     p => p.goalsAgainst);
+                      const mostLosses   = tiedTop(byLossDesc,   p => p.losses);
+                      const leastPlayed  = tiedTop(byPlayedAsc,  p => p.played);
+
+                      const total = squadRanking.length;
+                      type Zone = 'champions' | 'europa' | 'conference' | 'mid' | 'relegation';
+                      const getZone = (idx: number): Zone => {
+                        if (idx < 3) return 'champions';
+                        if (idx < 6) return 'europa';
+                        if (idx < 9) return 'conference';
+                        if (total >= 13 && idx >= total - 3) return 'relegation';
+                        return 'mid';
+                      };
+                      const ZONE_META: Record<Zone, { label: string; labelColor: string; border: string; bg: string; dotColor: string }> = {
+                        champions:  { label: 'Champions League', labelColor: 'text-amber-400',  border: 'border-l-amber-400',  bg: 'bg-amber-500/[0.06]',  dotColor: 'bg-amber-400'  },
+                        europa:     { label: 'Europa League',    labelColor: 'text-orange-400', border: 'border-l-orange-400', bg: 'bg-orange-500/[0.04]', dotColor: 'bg-orange-400' },
+                        conference: { label: 'Conference',       labelColor: 'text-teal-400',   border: 'border-l-teal-400',   bg: 'bg-teal-500/[0.04]',   dotColor: 'bg-teal-400'   },
+                        mid:        { label: '',                 labelColor: 'text-slate-400',  border: '',                    bg: '',                     dotColor: 'bg-slate-500'  },
+                        relegation: { label: 'Rebaixamento',     labelColor: 'text-red-500',    border: 'border-l-red-500',    bg: 'bg-red-500/[0.05]',    dotColor: 'bg-red-500'    },
+                      };
+
+                      const COL = '20px 1fr 22px 26px 22px 26px 26px 26px 28px 34px';
 
                       return (
                         <>
                           {/* Tabela de pontos corridos */}
-                          <div className="game-card border-primary-emerald/20 overflow-hidden">
-                            <div className="flex items-center justify-between border-b border-white/5 p-4">
-                              <div>
-                                <div className="text-[10px] font-black uppercase tracking-widest text-primary-emerald">Ranking • Pontos Corridos</div>
-                                <div className="mt-0.5 text-[8px] font-black uppercase tracking-widest text-slate-muted">V=3pts • E=1pt • D=0pts</div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <button
-                                  onClick={handleShareRanking}
-                                  disabled={isExportingImage}
-                                  className="rounded-lg bg-white/5 p-1.5 text-slate-muted hover:text-primary-emerald transition-colors"
-                                  title="Partilhar ranking"
-                                >
-                                  <Share2 size={14} />
-                                </button>
-                                <Trophy size={16} className="text-primary-emerald" />
-                              </div>
-                            </div>
+                          {(() => {
+                            // Agrupar jogadores por zona para o bloco lateral
+                            const zoneGroups: { zone: Zone; players: PlayerWinStats[] }[] = [];
+                            squadRanking.forEach((player, idx) => {
+                              const z = getZone(idx);
+                              const last = zoneGroups[zoneGroups.length - 1];
+                              if (last && last.zone === z) last.players.push(player);
+                              else zoneGroups.push({ zone: z, players: [player] });
+                            });
 
-                            {/* Cabeçalho da tabela */}
-                            <div className="grid border-b border-white/5 bg-black/20 px-2 py-1.5" style={{ gridTemplateColumns: '28px 1fr 28px 28px 28px 28px 28px 28px 36px' }}>
-                              {['#','NOME','J','V','E','D','GF','GC','APR%'].map((h, i) => (
-                                <div key={h} className={cn("text-[8px] font-black uppercase tracking-wider text-slate-muted", i === 1 ? 'text-left pl-1' : 'text-center')}>
-                                  {h}
-                                </div>
-                              ))}
-                            </div>
+                            const ZONE_SIDE: Record<Zone, {
+                              label: string[]; labelColor: string; sidebarBg: string;
+                              sidebarBorder: string; rowBg: string; numBg: string; numColor: string;
+                              icon: React.ReactNode;
+                            }> = {
+                              champions: {
+                                label: ['CHAMPIONS','LEAGUE'], labelColor: 'text-[#C8A400]',
+                                sidebarBg: 'bg-[#0B1E5A]/60', sidebarBorder: 'border-r border-[#C8A400]/30',
+                                rowBg: 'bg-[#0B1E5A]/20', numBg: 'bg-[#C8A400]/20', numColor: 'text-[#C8A400]',
+                                icon: (
+                                  <img src="/ucl.png" alt="UCL" width={26} height={26} className="object-contain drop-shadow-md"
+                                    onError={e => { (e.target as HTMLImageElement).style.display='none'; }}
+                                  />
+                                ),
+                              },
+                              europa: {
+                                label: ['EUROPA','LEAGUE'], labelColor: 'text-[#F97316]',
+                                sidebarBg: 'bg-[#7C2000]/40', sidebarBorder: 'border-r border-[#F97316]/30',
+                                rowBg: 'bg-[#7C2000]/10', numBg: 'bg-[#F97316]/20', numColor: 'text-[#F97316]',
+                                icon: (
+                                  <img src="/uel.png" alt="UEL" width={26} height={26} className="object-contain drop-shadow-md"
+                                    onError={e => { (e.target as HTMLImageElement).style.display='none'; }}
+                                  />
+                                ),
+                              },
+                              conference: {
+                                label: ['CONFE-','RENCE'], labelColor: 'text-[#00C48C]',
+                                sidebarBg: 'bg-[#003D2A]/50', sidebarBorder: 'border-r border-[#00C48C]/30',
+                                rowBg: 'bg-[#003D2A]/20', numBg: 'bg-[#00C48C]/20', numColor: 'text-[#00C48C]',
+                                icon: (
+                                  <img src="/uconfl.png" alt="UECL" width={26} height={26} className="object-contain drop-shadow-md"
+                                    onError={e => { (e.target as HTMLImageElement).style.display='none'; }}
+                                  />
+                                ),
+                              },
+                              mid: {
+                                label: ['CORRE','E NADA'], labelColor: 'text-slate-400',
+                                sidebarBg: 'bg-white/[0.02]', sidebarBorder: 'border-r border-white/5',
+                                rowBg: '', numBg: 'bg-white/5', numColor: 'text-slate-muted',
+                                icon: (
+                                  <img src="/correpedala.png" alt="Corre e nada" width={26} height={26} className="object-contain drop-shadow-md"
+                                    onError={e => { (e.target as HTMLImageElement).style.display='none'; }}
+                                  />
+                                ),
+                              },
+                              relegation: {
+                                label: ['ZONA','QUEDA'], labelColor: 'text-red-400',
+                                sidebarBg: 'bg-red-950/40', sidebarBorder: 'border-r border-red-500/30',
+                                rowBg: 'bg-red-950/20', numBg: 'bg-red-500/20', numColor: 'text-red-400',
+                                icon: (
+                                  <img src="/rebaixamento.png" alt="Rebaixamento" width={26} height={26} className="object-contain drop-shadow-md"
+                                    onError={e => { (e.target as HTMLImageElement).style.display='none'; }}
+                                  />
+                                ),
+                              },
+                            };
 
-                            {/* Linhas dos jogadores */}
-                            <div className="divide-y divide-white/[0.04]">
-                              {playerWinRanking.map((player, index) => (
-                                <div
-                                  key={player.id}
-                                  className={cn(
-                                    "grid items-center px-2 py-2.5",
-                                    index === 0 ? "bg-amber-500/5 border-l-2 border-l-amber-500" :
-                                    index === 1 ? "bg-slate-300/[0.03] border-l-2 border-l-slate-400" :
-                                    index === 2 ? "bg-orange-500/5 border-l-2 border-l-orange-500" : ""
-                                  )}
-                                  style={{ gridTemplateColumns: '28px 1fr 28px 28px 28px 28px 28px 28px 36px' }}
-                                >
-                                  <div className={cn(
-                                    "flex h-5 w-5 items-center justify-center rounded-md text-[9px] font-black",
-                                    index === 0 ? "bg-amber-500/20 text-amber-400" :
-                                    index === 1 ? "bg-slate-300/10 text-slate-300" :
-                                    index === 2 ? "bg-orange-500/20 text-orange-400" : "text-slate-muted"
-                                  )}>
-                                    {index + 1}
+                            return (
+                              <div className="game-card border-primary-emerald/20 overflow-hidden">
+                                {/* Header */}
+                                <div className="flex items-center justify-between border-b border-white/5 px-3 py-3">
+                                  <div>
+                                    <div className="text-[10px] font-black uppercase tracking-widest text-primary-emerald">Ranking • Pontos Corridos</div>
+                                    <div className="mt-0.5 text-[8px] font-black uppercase tracking-widest text-slate-muted">V=3pts • E=1pt • D=0pts</div>
                                   </div>
-                                  <div className="min-w-0 pl-1">
-                                    <div className="truncate text-[11px] font-black text-slate-text">{player.name}</div>
-                                  </div>
-                                  <div className="text-center text-[10px] font-bold text-slate-muted">{player.played}</div>
-                                  <div className="text-center text-[10px] font-black text-primary-emerald">{player.wins}</div>
-                                  <div className="text-center text-[10px] font-bold text-slate-muted">{player.draws}</div>
-                                  <div className="text-center text-[10px] font-bold text-red-400">{player.losses}</div>
-                                  <div className="text-center text-[10px] font-bold text-blue-400">{player.goalsFor}</div>
-                                  <div className="text-center text-[10px] font-bold text-slate-muted">{player.goalsAgainst}</div>
-                                  <div className={cn(
-                                    "text-center text-[10px] font-black",
-                                    player.winRate >= 60 ? "text-primary-emerald" : player.winRate >= 40 ? "text-amber-400" : "text-red-400"
-                                  )}>
-                                    {player.winRate}%
+                                  <div className="flex items-center gap-2">
+                                    <button onClick={handleShareRanking} disabled={isExportingImage}
+                                      className="rounded-lg bg-white/5 p-1.5 text-slate-muted hover:text-primary-emerald transition-colors">
+                                      <Share2 size={14} />
+                                    </button>
+                                    <Trophy size={16} className="text-primary-emerald" />
                                   </div>
                                 </div>
-                              ))}
-                            </div>
-                          </div>
+
+                                {/* Cabeçalho das colunas */}
+                                <div className="flex border-b border-white/5 bg-black/20">
+                                  <div className="w-10 shrink-0" />
+                                  <div className="flex-1 grid py-1.5 pr-1" style={{ gridTemplateColumns: COL }}>
+                                    {['#','NOME','J','V','E','D','GF','GC','PTS','APR%'].map((h, i) => (
+                                      <div key={h} className={cn("text-[7px] font-black uppercase tracking-wider",
+                                        i === 1 ? 'text-left pl-1 text-slate-muted' :
+                                        i === 3 ? 'text-center text-primary-emerald/70' :
+                                        i === 5 ? 'text-center text-red-400/70' :
+                                        i === 8 ? 'text-center text-amber-400/70' :
+                                        'text-center text-slate-muted'
+                                      )}>{h}</div>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                {/* Grupos de zona */}
+                                {zoneGroups.map(({ zone, players: zp }) => {
+                                  const zm = ZONE_SIDE[zone];
+                                  const globalStart = squadRanking.indexOf(zp[0]);
+                                  return (
+                                    <div key={zone} className="flex border-t border-white/[0.05]">
+                                      {/* Bloco lateral da zona */}
+                                      <div className={cn("w-10 shrink-0 flex flex-col items-center justify-center gap-1 py-2 px-1", zm.sidebarBg, zm.sidebarBorder)}>
+                                        {zm.icon}
+                                        {zm.label.map((line, li) => (
+                                          <span key={li} className={cn("text-[5.5px] font-black uppercase tracking-wider leading-tight text-center", zm.labelColor)}>{line}</span>
+                                        ))}
+                                      </div>
+                                      {/* Linhas dos jogadores */}
+                                      <div className="flex-1 divide-y divide-white/[0.04]">
+                                        {zp.map((player, zi) => {
+                                          const idx = globalStart + zi;
+                                          return (
+                                            <div key={player.id}
+                                              className={cn("grid items-center py-2 pr-1 pl-1", zm.rowBg)}
+                                              style={{ gridTemplateColumns: COL }}
+                                            >
+                                              <div className={cn("flex h-5 w-5 items-center justify-center rounded-md text-[9px] font-black", zm.numBg, zm.numColor)}>
+                                                {idx + 1}
+                                              </div>
+                                              <div className="min-w-0 pl-1">
+                                                <div className="truncate text-[11px] font-black text-slate-text">{player.name}</div>
+                                              </div>
+                                              <div className="text-center text-[10px] font-bold text-slate-muted">{player.played}</div>
+                                              <div className="text-center text-[10px] font-black text-primary-emerald">{player.wins}</div>
+                                              <div className="text-center text-[10px] font-bold text-slate-muted">{player.draws}</div>
+                                              <div className="text-center text-[10px] font-bold text-red-400">{player.losses}</div>
+                                              <div className="text-center text-[10px] font-bold text-slate-muted">{player.goalsFor}</div>
+                                              <div className="text-center text-[10px] font-bold text-slate-muted">{player.goalsAgainst}</div>
+                                              <div className="text-center text-[10px] font-black text-amber-400">{player.points}</div>
+                                              <div className={cn("text-center text-[9px] font-black",
+                                                player.winRate >= 60 ? "text-primary-emerald" : player.winRate >= 40 ? "text-amber-400" : "text-red-400"
+                                              )}>{player.winRate}%</div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()}
 
                           {/* Widgets de destaque */}
                           {(() => {
                             const widgetDefs = [
-                              { icon: <LayoutList size={14} />, label: 'Mais jogos',      stat: mostPlayed,  suffix: 'jogos',       color: 'text-blue-400',        border: 'border-blue-500/20',        accent: '#60A5FA' },
-                              { icon: <Trophy size={14} />,     label: 'Mais vitórias',   stat: mostWins,    suffix: 'vitórias',    color: 'text-amber-400',       border: 'border-amber-500/20',       accent: '#F59E0B' },
-                              { icon: <Sword size={14} />,      label: 'Time com + gols', stat: mostGoals,   suffix: 'gols feitos', color: 'text-primary-emerald', border: 'border-primary-emerald/20', accent: '#10B981' },
-                              { icon: <Shield size={14} />,     label: 'Time + gols sofridos', stat: mostConceded, suffix: 'gols sofridos', color: 'text-orange-400', border: 'border-orange-500/20', accent: '#FB923C' },
-                              { icon: <Target size={14} />,     label: 'Mais derrotas',   stat: mostLosses,  suffix: 'derrotas',    color: 'text-red-400',         border: 'border-red-500/20',         accent: '#F87171' },
-                              { icon: <Users size={14} />,      label: 'Menos jogos (+5)',stat: leastPlayed, suffix: 'jogos',       color: 'text-purple-400',      border: 'border-purple-500/20',      accent: '#C084FC' },
+                              { icon: <LayoutList size={14} />, label: 'Mais jogos',           stat: mostPlayed,   suffix: 'jogos',          color: 'text-blue-400',        border: 'border-blue-500/20',        accent: '#60A5FA' },
+                              { icon: <Trophy size={14} />,     label: 'Mais vitórias',        stat: mostWins,     suffix: 'vitórias',       color: 'text-amber-400',       border: 'border-amber-500/20',       accent: '#F59E0B' },
+                              { icon: <Sword size={14} />,      label: 'Time com + gols',      stat: mostGoals,    suffix: 'gols feitos',    color: 'text-primary-emerald', border: 'border-primary-emerald/20', accent: '#10B981' },
+                              { icon: <Shield size={14} />,     label: 'Time + gols sofridos', stat: mostConceded, suffix: 'gols sofridos',  color: 'text-orange-400',      border: 'border-orange-500/20',      accent: '#FB923C' },
+                              { icon: <Target size={14} />,     label: 'Mais derrotas',        stat: mostLosses,   suffix: 'derrotas',       color: 'text-red-400',         border: 'border-red-500/20',         accent: '#F87171' },
+                              { icon: <Users size={14} />,      label: 'Menos jogos (+5)',     stat: leastPlayed,  suffix: 'jogos',          color: 'text-purple-400',      border: 'border-purple-500/20',      accent: '#C084FC' },
                             ].filter(w => w.stat.names.length > 0);
 
                             const shareableWidgets: WidgetData[] = widgetDefs.map(w => ({
-                              label: w.label,
-                              names: w.stat.names,
-                              value: w.stat.value,
-                              suffix: w.suffix,
-                              accent: w.accent,
+                              label: w.label, names: w.stat.names, value: w.stat.value, suffix: w.suffix, accent: w.accent,
                             }));
 
                             return (
                               <div className="game-card border-slate-border/30 overflow-hidden">
                                 <div className="flex items-center justify-between border-b border-white/5 px-4 py-3">
                                   <div className="text-[10px] font-black uppercase tracking-widest text-slate-text">Destaques</div>
-                                  <button
-                                    onClick={() => handleShareWidgets(shareableWidgets)}
-                                    disabled={isExportingImage}
-                                    className="rounded-lg bg-white/5 p-1.5 text-slate-muted hover:text-primary-emerald transition-colors"
-                                    title="Partilhar destaques"
-                                  >
+                                  <button onClick={() => handleShareWidgets(shareableWidgets)} disabled={isExportingImage}
+                                    className="rounded-lg bg-white/5 p-1.5 text-slate-muted hover:text-primary-emerald transition-colors">
                                     <Share2 size={14} />
                                   </button>
                                 </div>
